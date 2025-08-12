@@ -2,8 +2,11 @@
 Useful tool to check OpenShift clusters created on IBM Cloud PowerVS
 
 CLI opitons:
-
-[TOC]
+- [check-ci](https://github.com/hamzy/PowerVS-Check#check-ci)
+- [check-capi-kubeconfig](https://github.com/hamzy/PowerVS-Check#check-capi-kubeconfig)
+- [check-create](https://github.com/hamzy/PowerVS-Check#check-create)
+- [check-kubeconfig](https://github.com/hamzy/PowerVS-Check#check-kubeconfig)
+- [create-jumpbox](https://github.com/hamzy/PowerVS-Check#create-jumpbox)
 
 ## check-ci
 
