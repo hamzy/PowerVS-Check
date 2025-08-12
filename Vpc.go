@@ -28,7 +28,7 @@ import (
 )
 
 type Vpc struct {
-	name     string
+	name string
 
 	services *Services
 
@@ -42,18 +42,18 @@ const (
 
 func NewVpc(services *Services) ([]RunnableObject, []error) {
 	var (
-		vpcName         string
-		region          string
-		vpcRegion       string
-		vpcSvc          *vpcv1.VpcV1
-		ctx             context.Context
-		cancel          context.CancelFunc
-		foundInstances  []string
-		vpc             *Vpc
-		vpcs            []RunnableObject
-		errs            []error
-		idxVpc          int
-		err             error
+		vpcName        string
+		region         string
+		vpcRegion      string
+		vpcSvc         *vpcv1.VpcV1
+		ctx            context.Context
+		cancel         context.CancelFunc
+		foundInstances []string
+		vpc            *Vpc
+		vpcs           []RunnableObject
+		errs           []error
+		idxVpc         int
+		err            error
 	)
 
 	vpc = &Vpc{
@@ -151,9 +151,9 @@ func NewVpc(services *Services) ([]RunnableObject, []error) {
 func findVpcs(name string, vpcSvc *vpcv1.VpcV1, ctx context.Context) ([]string, error) {
 	var (
 		// type ListVpcsOptions
-		options        *vpcv1.ListVpcsOptions
-		perPage        int64 = 64
-		moreData             = true
+		options  *vpcv1.ListVpcsOptions
+		perPage  int64 = 64
+		moreData       = true
 		// type VPCCollection
 		vpcs           *vpcv1.VPCCollection
 		response       *core.DetailedResponse
@@ -162,7 +162,7 @@ func findVpcs(name string, vpcSvc *vpcv1.VpcV1, ctx context.Context) ([]string, 
 	)
 	log.Debugf("findVpcs: name = %s", name)
 
-	matchFunc := func (vpc vpcv1.VPC, match string) bool {
+	matchFunc := func(vpc vpcv1.VPC, match string) bool {
 		if match == "" {
 			return false
 		}
@@ -327,18 +327,18 @@ func (vpc Vpc) FindSecurityGroupsByVPC() ([]string, error) {
 	result = make([]string, 0)
 
 	for _, sgRule := range defaultSG.Rules {
-//		log.Debugf("wantedPorts = %+v", wantedPorts)
-//		log.Debugf("findSecurityGroupsByVPC: type = %s", reflect.TypeOf(sgRule).String())
+		//		log.Debugf("wantedPorts = %+v", wantedPorts)
+		//		log.Debugf("findSecurityGroupsByVPC: type = %s", reflect.TypeOf(sgRule).String())
 		switch reflect.TypeOf(sgRule).String() {
 		case "*vpcv1.SecurityGroupRuleSecurityGroupRuleProtocolAll":
 			securityGroupRule, ok := sgRule.(*vpcv1.SecurityGroupRuleSecurityGroupRuleProtocolAll)
 			if ok {
 				result = append(result, *securityGroupRule.ID)
 			}
-//			for i := *securityGroupRule.PortMin; i <= *securityGroupRule.PortMax; i++ {
-//				log.Debugf("SG All deleting %d", i)
-//				wantedPorts.Delete(i)
-//			}
+			//			for i := *securityGroupRule.PortMin; i <= *securityGroupRule.PortMax; i++ {
+			//				log.Debugf("SG All deleting %d", i)
+			//				wantedPorts.Delete(i)
+			//			}
 		case "*vpcv1.SecurityGroupRuleSecurityGroupRuleProtocolTcpudp":
 			securityGroupRule, ok := sgRule.(*vpcv1.SecurityGroupRuleSecurityGroupRuleProtocolTcpudp)
 			if ok {
@@ -692,11 +692,11 @@ func (vpc *Vpc) CreateFIP(instance *vpcv1.Instance) error {
 		resourceGroupID = vpc.services.GetResourceGroupID()
 
 		createFloatingIPOptions = vpcSvc.NewCreateFloatingIPOptions(&vpcv1.FloatingIPPrototypeFloatingIPByZone{
-			Name:          &fipName,
+			Name: &fipName,
 			ResourceGroup: &vpcv1.ResourceGroupIdentity{
 				ID: &resourceGroupID,
 			},
-			Zone:          &vpcv1.ZoneIdentityByName{
+			Zone: &vpcv1.ZoneIdentityByName{
 				Name: &zone,
 			},
 		})
@@ -816,11 +816,11 @@ func (vpc *Vpc) ClusterStatus() {
 
 	switch *vpc.innerVpc.HealthState {
 	case "ok":
-//	case "degraded":
-//	case "faulted":
-//	case "inapplicable":
-//	case "failed":
-//	case "deleting":
+		//	case "degraded":
+		//	case "faulted":
+		//	case "inapplicable":
+		//	case "failed":
+		//	case "deleting":
 	default:
 		fmt.Printf("%s %s is NOTOK.  The health state is not ok but %s\n", vpcObjectName, vpc.name, *vpc.innerVpc.HealthState)
 		isOk = false
@@ -851,9 +851,9 @@ func (vpc *Vpc) ClusterStatus() {
 	idRules, _ := vpc.FindSecurityGroupsByVPC()
 	log.Debugf("idRules = %+v", idRules)
 
-// func (vpc *VpcV1) ListSecurityGroupsWithContext(ctx context.Context, listSecurityGroupsOptions *ListSecurityGroupsOptions) (result *SecurityGroupCollection, response *core.DetailedResponse, err error) {
-// func (vpc *VpcV1) GetSecurityGroupWithContext(ctx context.Context, getSecurityGroupOptions *GetSecurityGroupOptions) (result *SecurityGroup, response *core.DetailedResponse, err error) {
-// func (vpc *VpcV1) ListSecurityGroupRulesWithContext(ctx context.Context, listSecurityGroupRulesOptions *ListSecurityGroupRulesOptions) (result *SecurityGroupRuleCollection, response *core.DetailedResponse, err error) {
+	// func (vpc *VpcV1) ListSecurityGroupsWithContext(ctx context.Context, listSecurityGroupsOptions *ListSecurityGroupsOptions) (result *SecurityGroupCollection, response *core.DetailedResponse, err error) {
+	// func (vpc *VpcV1) GetSecurityGroupWithContext(ctx context.Context, getSecurityGroupOptions *GetSecurityGroupOptions) (result *SecurityGroup, response *core.DetailedResponse, err error) {
+	// func (vpc *VpcV1) ListSecurityGroupRulesWithContext(ctx context.Context, listSecurityGroupRulesOptions *ListSecurityGroupRulesOptions) (result *SecurityGroupRuleCollection, response *core.DetailedResponse, err error) {
 
 	if isOk {
 		fmt.Printf("%s %s is OK.\n", vpcObjectName, vpc.name)

@@ -26,36 +26,36 @@ import (
 )
 
 type CloudObjectStorage struct {
-	name            string
+	name string
 
-	services        *Services
+	services *Services
 
-	innerCos        *resourcecontrollerv2.ResourceInstance
+	innerCos *resourcecontrollerv2.ResourceInstance
 
-	awsSession      *session.Session
+	awsSession *session.Session
 
-	s3Client        *s3.S3
+	s3Client *s3.S3
 
 	serviceEndpoint string
 }
 
 const (
-	cosObjectName ="Cloud Object Storage"
+	cosObjectName = "Cloud Object Storage"
 )
 
 func NewCloudObjectStorage(services *Services) ([]RunnableObject, []error) {
 	var (
-		cosName         string
-		region          string
-		controllerSvc   *resourcecontrollerv2.ResourceControllerV2
-		ctx             context.Context
-		cancel          context.CancelFunc
-		foundInstances  []string
-		cos             *CloudObjectStorage
-		coses           []RunnableObject
-		errs            []error
-		idxCos          int
-		err             error
+		cosName        string
+		region         string
+		controllerSvc  *resourcecontrollerv2.ResourceControllerV2
+		ctx            context.Context
+		cancel         context.CancelFunc
+		foundInstances []string
+		cos            *CloudObjectStorage
+		coses          []RunnableObject
+		errs           []error
+		idxCos         int
+		err            error
 	)
 
 	cos = &CloudObjectStorage{
@@ -161,8 +161,8 @@ func findCos(name string, controllerSvc *resourcecontrollerv2.ResourceController
 	options = controllerSvc.NewListResourceInstancesOptions()
 	options.Limit = &perPage
 	options.SetType("service_instance")
-//	options.SetResourcePlanID(cosStandardResourceID)
-//	options.SetResourcePlanID(cosOneRateResourceID)		// @BUG does not produce a list?
+	//	options.SetResourcePlanID(cosStandardResourceID)
+	//	options.SetResourcePlanID(cosOneRateResourceID)		// @BUG does not produce a list?
 
 	for moreData {
 		select {
@@ -193,7 +193,7 @@ func findCos(name string, controllerSvc *resourcecontrollerv2.ResourceController
 			}
 
 			log.Debugf("findCOS: FOUND %s %s", *instance.Name, *instance.GUID)
-			return []string{ *instance.GUID }, nil
+			return []string{*instance.GUID}, nil
 		}
 
 		if resources.NextURL != nil {

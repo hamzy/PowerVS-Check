@@ -38,7 +38,7 @@ type NewRunnableObjectsEntry struct {
 }
 
 func BubbleSort(input []RunnableObject) []RunnableObject {
-	priority := func (ro RunnableObject) int {
+	priority := func(ro RunnableObject) int {
 		p, e := ro.Priority()
 		if e != nil {
 			return -1

@@ -26,13 +26,13 @@ import (
 )
 
 type TransitGateway struct {
-	name      string
+	name string
 
-	tgClient  *transitgatewayapisv1.TransitGatewayApisV1
+	tgClient *transitgatewayapisv1.TransitGatewayApisV1
 
 	services *Services
 
-	innerTg   *transitgatewayapisv1.TransitGateway
+	innerTg *transitgatewayapisv1.TransitGateway
 }
 
 const (
@@ -151,7 +151,7 @@ func findTransitGateway(tgClient *transitgatewayapisv1.TransitGatewayApisV1, ctx
 
 	log.Debugf("Listing Transit Gateways (%s) by NAME", name)
 
-	matchFunc := func (tg transitgatewayapisv1.TransitGateway, match string) bool {
+	matchFunc := func(tg transitgatewayapisv1.TransitGateway, match string) bool {
 		if match == "" {
 			return false
 		}
@@ -204,7 +204,7 @@ func findTransitGateway(tgClient *transitgatewayapisv1.TransitGatewayApisV1, ctx
 
 			log.Debugf("listTransitGatewaysByName: FOUND %s, %s", *gateway.ID, *gateway.Name)
 
-			return []string{ *gateway.ID }, nil
+			return []string{*gateway.ID}, nil
 		}
 
 		if gatewayCollection.First != nil {
@@ -299,8 +299,8 @@ func (tg *TransitGateway) CheckConnections() (int, int, error) {
 		err                          error
 		perPage                      int64 = 32
 		moreData                           = true
-		pvsCount                     = 0
-		vpcCount                     = 0
+		pvsCount                           = 0
+		vpcCount                           = 0
 	)
 
 	if tg.innerTg == nil {

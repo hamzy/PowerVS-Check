@@ -27,11 +27,10 @@ type Object struct {
 
 func NewObject(services *Services) ([]RunnableObject, error) {
 	var (
-//		err       error
+	//		err       error
 	)
 
-	return []RunnableObject{&Object{
-	}}, nil
+	return []RunnableObject{&Object{}}, nil
 }
 
 func (o *Object) CRN() (string, error) {

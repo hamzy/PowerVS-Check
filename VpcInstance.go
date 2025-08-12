@@ -23,11 +23,11 @@ import (
 )
 
 type VpcInstance struct {
-	name             string
+	name string
 
-	groupID          string
+	groupID string
 
-	services         *Services
+	services *Services
 
 	innerVpcInstance *vpcv1.Instance
 }
@@ -55,11 +55,11 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
-		}}, []error{ err }
+		}}, []error{err}
 	}
 
-        resourceGroupID = services.GetMetadata().GetResourceGroup()
-        log.Debugf("NewVpcInstance: resourceGroupID = %s", resourceGroupID)
+	resourceGroupID = services.GetMetadata().GetResourceGroup()
+	log.Debugf("NewVpcInstance: resourceGroupID = %s", resourceGroupID)
 
 	resourceGroupID, err = services.ResourceGroupNameToID(resourceGroupID)
 	if err != nil {
@@ -67,7 +67,7 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
-		}}, []error{ err }
+		}}, []error{err}
 	}
 
 	vpcSvc = services.GetVpcSvc()
@@ -85,7 +85,7 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
-		}}, []error{ err }
+		}}, []error{err}
 	}
 	log.Debugf("NewVpcInstance: foundInstances = %+v, err = %v", foundInstances, err)
 
@@ -205,11 +205,11 @@ func (vpci *VpcInstance) ClusterStatus() {
 
 	switch *vpci.innerVpcInstance.HealthState {
 	case "ok":
-//	case "degraded":
-//	case "faulted":
-//	case "inapplicable":
-//	case "failed":
-//	case "deleting":
+		//	case "degraded":
+		//	case "faulted":
+		//	case "inapplicable":
+		//	case "failed":
+		//	case "deleting":
 	default:
 		fmt.Printf("%s %s is NOTOK.  The health state is not ok but %s\n", vpciObjectName, vpci.name, *vpci.innerVpcInstance.HealthState)
 		return

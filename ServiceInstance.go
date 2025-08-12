@@ -135,7 +135,7 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 	idxSi = 0
 	sis[idxSi] = si
 
-	if len (foundInstances) == 0 {
+	if len(foundInstances) == 0 {
 		if guid != "" {
 			errs[idxSi] = fmt.Errorf("Unable to find %s with a guid of %s", siObjectName, guid)
 		} else {
@@ -224,17 +224,17 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 // findServiceInstance returns the service instance matching by name in the IBM Cloud.
 func findServiceInstance(controllerSvc *resourcecontrollerv2.ResourceControllerV2, ctx context.Context, name string, resourceGroupID string) ([]string, error) {
 	var (
-		options    *resourcecontrollerv2.ListResourceInstancesOptions
-		resources  *resourcecontrollerv2.ResourceInstancesList
-		perPage    int64 = 10
-		moreData         = true
-		nextURL    *string
-		err        error
+		options   *resourcecontrollerv2.ListResourceInstancesOptions
+		resources *resourcecontrollerv2.ResourceInstancesList
+		perPage   int64 = 10
+		moreData        = true
+		nextURL   *string
+		err       error
 	)
 
 	log.Debugf("Listing service instances by NAME %s", name)
 
-	matchFunc := func (ri resourcecontrollerv2.ResourceInstance, match string) bool {
+	matchFunc := func(ri resourcecontrollerv2.ResourceInstance, match string) bool {
 		if match == "" {
 			return false
 		}
@@ -293,7 +293,7 @@ func findServiceInstance(controllerSvc *resourcecontrollerv2.ResourceControllerV
 
 			log.Debugf("listServiceInstancesByName: FOUND resource.Name = %s", *resource.Name)
 
-			return []string{ *resource.ID }, nil
+			return []string{*resource.ID}, nil
 		}
 
 		// Based on: https://cloud.ibm.com/apidocs/resource-controller/resource-controller?code=go#list-resource-instances
@@ -642,11 +642,11 @@ func (si *ServiceInstance) FindPVMInstance(pvmInstanceName string) ([]*models.PV
 	log.Debugf("FindPVMInstance: pvmInstanceName = %s", pvmInstanceName)
 	matchExp = regexp.MustCompile(pvmInstanceName)
 
-	matchFunc := func (instanceRef *models.PVMInstanceReference, match string) bool {
+	matchFunc := func(instanceRef *models.PVMInstanceReference, match string) bool {
 		if match == "" {
 			return false
 		}
-		if matchExp.MatchString(*instanceRef.ServerName)  {
+		if matchExp.MatchString(*instanceRef.ServerName) {
 			return true
 		}
 		if *instanceRef.PvmInstanceID == match {
@@ -1111,7 +1111,7 @@ func (si *ServiceInstance) ClusterStatus() {
 	if err != nil {
 		fmt.Printf("%s %s did not have a worker instance got error: %v\n", siObjectName, si.name, err)
 		isOk = false
-	} else if len (workersFound) > 0 {
+	} else if len(workersFound) > 0 {
 		fmt.Printf("%s %s found %d worker instances.\n", siObjectName, si.name, len(workersFound))
 
 		for _, worker := range workersFound {

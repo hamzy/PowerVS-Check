@@ -46,31 +46,31 @@ var (
 
 type Services struct {
 	//
-	apiKey         string
+	apiKey string
 
 	//
-	metadata       *Metadata
+	metadata *Metadata
 
 	//
-	bxSession      *bxsession.Session
+	bxSession *bxsession.Session
 
 	//
-	user           *User
+	user *User
 
 	// type VpcV1 struct
-	vpcSvc         *vpcv1.VpcV1
+	vpcSvc *vpcv1.VpcV1
 
 	// type ResourceControllerV2
-	controllerSvc  *resourcecontrollerv2.ResourceControllerV2
+	controllerSvc *resourcecontrollerv2.ResourceControllerV2
 
 	// type TransitGatewayApisV1
-	tgClient       *transitgatewayapisv1.TransitGatewayApisV1
+	tgClient *transitgatewayapisv1.TransitGatewayApisV1
 
 	// type ResourceManagerV2
-	managementSvc   *resourcemanagerv2.ResourceManagerV2
+	managementSvc *resourcemanagerv2.ResourceManagerV2
 
 	//
-	ctx             context.Context
+	ctx context.Context
 
 	//
 	resourceGroupID string
@@ -138,7 +138,7 @@ func NewServices(metadata *Metadata, apiKey string) (*Services, error) {
 	}
 	log.Debugf("NewServices: controllerSvc = %+v", controllerSvc)
 
-	tgClient, err = initTransitGatewayClient (apiKey)
+	tgClient, err = initTransitGatewayClient(apiKey)
 	if err != nil {
 		log.Fatalf("Error: NewServices: initTransitGatewayClient returns %v", err)
 		return nil, err
@@ -156,15 +156,15 @@ func NewServices(metadata *Metadata, apiKey string) (*Services, error) {
 	log.Debugf("NewServices: resourceGroupID = %s", resourceGroupID)
 
 	services = &Services{
-		apiKey:         apiKey,
-		metadata:       metadata,
-		bxSession:      bxSession,
-		user:           user,
-		vpcSvc:         vpcSvc,
-		controllerSvc:  controllerSvc,
-		tgClient:       tgClient,
-		managementSvc:  managementSvc,
-		ctx:            ctx,
+		apiKey:          apiKey,
+		metadata:        metadata,
+		bxSession:       bxSession,
+		user:            user,
+		vpcSvc:          vpcSvc,
+		controllerSvc:   controllerSvc,
+		tgClient:        tgClient,
+		managementSvc:   managementSvc,
+		ctx:             ctx,
 		resourceGroupID: resourceGroupID,
 	}
 
@@ -204,7 +204,7 @@ func (svc *Services) GetUser() *User {
 }
 
 func (svc *Services) GetContextWithTimeout() (context.Context, context.CancelFunc) {
-        return context.WithTimeout(svc.ctx, defaultTimeout)
+	return context.WithTimeout(svc.ctx, defaultTimeout)
 }
 
 func (svc *Services) GetResourceGroupID() string {
@@ -400,7 +400,7 @@ func initResourceControllerService(apiKey string) (*resourcecontrollerv2.Resourc
 	return controllerSvc, nil
 }
 
-func initTransitGatewayClient (apiKey string) (*transitgatewayapisv1.TransitGatewayApisV1, error) {
+func initTransitGatewayClient(apiKey string) (*transitgatewayapisv1.TransitGatewayApisV1, error) {
 	var (
 		authenticator core.Authenticator
 		versionDate   = "2023-07-04"

@@ -25,11 +25,11 @@ import (
 )
 
 type LoadBalancer struct {
-	name     string
+	name string
 
 	services *Services
 
-	innerLb  *vpcv1.LoadBalancer
+	innerLb *vpcv1.LoadBalancer
 }
 
 const (
@@ -38,16 +38,16 @@ const (
 
 func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 	var (
-		lbName    string
-		vpcSvc    *vpcv1.VpcV1
-		ctx       context.Context
-		cancel    context.CancelFunc
-		lbIds     []string
-		ros       []RunnableObject
-		lbs       []*LoadBalancer
-		response  *core.DetailedResponse
-		err       error
-		errs      []error
+		lbName   string
+		vpcSvc   *vpcv1.VpcV1
+		ctx      context.Context
+		cancel   context.CancelFunc
+		lbIds    []string
+		ros      []RunnableObject
+		lbs      []*LoadBalancer
+		response *core.DetailedResponse
+		err      error
+		errs     []error
 	)
 
 	lbName, err = services.GetMetadata().GetObjectName(RunnableObject(&LoadBalancer{}))
@@ -56,7 +56,7 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 			name:     lbName,
 			services: services,
 			innerLb:  nil,
-		}}, []error{ err }
+		}}, []error{err}
 	}
 
 	vpcSvc = services.GetVpcSvc()
@@ -74,22 +74,22 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 			name:     lbName,
 			services: services,
 			innerLb:  nil,
-		}}, []error{ err }
+		}}, []error{err}
 	}
 	log.Debugf("NewLoadBalancer: lbIds = %+v", lbIds)
 
 	lbs = []*LoadBalancer{
-		&LoadBalancer{
+		{
 			name:     "(internal load balancer)",
 			services: services,
 			innerLb:  nil,
 		},
-		&LoadBalancer{
+		{
 			name:     "(external load balancer)",
 			services: services,
 			innerLb:  nil,
 		},
-		&LoadBalancer{
+		{
 			name:     "(kube load balancer)",
 			services: services,
 			innerLb:  nil,
@@ -147,7 +147,7 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 type LoadBalancerType int
 
 const (
-        LoadBalancerTypeUnknown  LoadBalancerType = iota
+	LoadBalancerTypeUnknown LoadBalancerType = iota
 	LoadBalancerTypeInternal
 	LoadBalancerTypeExternal
 	LoadBalancerTypeKube
@@ -249,7 +249,7 @@ func (lb *LoadBalancer) listLoadBalancerPools() ([]*vpcv1.LoadBalancerPool, erro
 
 	vpcSvc = lb.services.GetVpcSvc()
 
-	lbPoolsOptions = vpcSvc.NewListLoadBalancerPoolsOptions(*lb.innerLb.ID) 
+	lbPoolsOptions = vpcSvc.NewListLoadBalancerPoolsOptions(*lb.innerLb.ID)
 
 	lbpc, _, err = vpcSvc.ListLoadBalancerPoolsWithContext(ctx, lbPoolsOptions)
 	if err != nil {
@@ -467,17 +467,17 @@ func (lb *LoadBalancer) ClusterStatus() {
 	case LoadBalancerTypeInternal:
 		// Internal Load Balancer
 		if !lb.checkLoadBalancerPool([]string{
-				"pool-6443",
-			},
+			"pool-6443",
+		},
 			"port 6443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 
 		if !lb.checkLoadBalancerPool([]string{
-				"machine-config-server",
-				"additional-pool-22623",
-			},
+			"machine-config-server",
+			"additional-pool-22623",
+		},
 			"machine config server") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
@@ -485,8 +485,8 @@ func (lb *LoadBalancer) ClusterStatus() {
 	case LoadBalancerTypeExternal:
 		// External Load Balancer
 		if !lb.checkLoadBalancerPool([]string{
-				"pool-6443",
-			},
+			"pool-6443",
+		},
 			"port 6443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
@@ -494,16 +494,16 @@ func (lb *LoadBalancer) ClusterStatus() {
 	case LoadBalancerTypeKube:
 		// The Kube pool
 		if !lb.checkLoadBalancerPool([]string{
-				"tcp-80",
-			},
+			"tcp-80",
+		},
 			"port 80") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 
 		if !lb.checkLoadBalancerPool([]string{
-				"tcp-443",
-			},
+			"tcp-443",
+		},
 			"port 443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return

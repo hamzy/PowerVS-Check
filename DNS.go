@@ -33,10 +33,10 @@ import (
 
 type DNS struct {
 	//
-	services      *Services
+	services *Services
 
 	//
-	dnsSvc        *dnssvcsv1.DnsSvcsV1
+	dnsSvc *dnssvcsv1.DnsSvcsV1
 
 	//
 	dnsRecordsSvc *dnsrecordsv1.DnsRecordsV1
@@ -55,14 +55,14 @@ func NewDNS(services *Services) ([]RunnableObject, []error) {
 
 	dnsSvc, dnsRecordsSvc, err = initDNSService(services)
 	if err != nil {
-		return []RunnableObject{}, []error{ err }
+		return []RunnableObject{}, []error{err}
 	}
 
 	return []RunnableObject{&DNS{
 		services:      services,
 		dnsSvc:        dnsSvc,
 		dnsRecordsSvc: dnsRecordsSvc,
-	}}, []error{ nil }
+	}}, []error{nil}
 }
 
 func initDNSService(services *Services) (*dnssvcsv1.DnsSvcsV1, *dnsrecordsv1.DnsRecordsV1, error) {
@@ -295,7 +295,7 @@ func (dns *DNS) ClusterStatus() {
 	var (
 		metadata *Metadata
 		records  []string
-		patterns = []string{ "api-int", "api", "*.apps" }
+		patterns = []string{"api-int", "api", "*.apps"}
 		name     string
 		found    bool
 		err      error

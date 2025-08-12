@@ -24,9 +24,9 @@ import (
 )
 
 type Metadata struct {
-	ciMode          bool
-	createMetadata  CreateMetadata
-	ciMetadata      CIMetadata
+	ciMode         bool
+	createMetadata CreateMetadata
+	ciMetadata     CIMetadata
 }
 
 type CreateMetadata struct {
@@ -54,7 +54,7 @@ type PowerVSMetadata struct {
 	ServiceEndpoints     []configv1.PowerVSServiceEndpoint `json:"serviceEndpoints,omitempty"`
 	TransitGateway       string                            `json:"transitGatewayName"`
 	// Only in release-4.20
-	VPC                  string                            `json:"vpcName"`
+	VPC string `json:"vpcName"`
 }
 
 // {"region": "", "vpcRegion": "", "zone": "", "resourceGroup": "", "serviceInstance": "", "vpc": "", "transitGateway": ""}
@@ -124,7 +124,7 @@ func NewMetadataFromCIMetadata(filename string) (*Metadata, error) {
 	log.Debugf("NewMetadataFromCIMetadata: metadata = %+v", metadata)
 	log.Debugf("NewMetadataFromCIMetadata: metadata.ciMetadata = %+v", metadata.ciMetadata)
 
-    	metadata.createMetadata.PowerVS = &PowerVSMetadata{
+	metadata.createMetadata.PowerVS = &PowerVSMetadata{
 		Region:               metadata.ciMetadata.Region,
 		VPCRegion:            metadata.ciMetadata.VPCRegion,
 		Zone:                 metadata.ciMetadata.Zone,
@@ -182,9 +182,9 @@ func (m *Metadata) GetClusterObjectName(ro RunnableObject) (string, error) {
 	case "*main.TransitGateway":
 		if m.GetTransitGatewayName() != "" {
 			name = m.GetTransitGatewayName()
-		} else {        
+		} else {
 			name = fmt.Sprintf("%s-tg", m.GetInfraID())
-		}       
+		}
 		return name, nil
 	}
 	return "", fmt.Errorf("Unknown RunnableObject %+v", ro)

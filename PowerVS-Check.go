@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// (/bin/rm go.*; go mod init example/user/PowerVS-Check-Create; go mod tidy)
-// (echo "vet:"; go vet || exit 1; echo "build:"; go build -ldflags="-X main.version=$(git describe --always --long --dirty) -X main.release=$(git describe --tags --abbrev=0)" -o PowerVS-Check-Create *.go || exit 1; echo "run:"; ./PowerVS-Check-Create check-create -apiKey "..." -metadata metadata.json -shouldDebug true)
+// (/bin/rm go.*; go mod init example/user/PowerVS-Check; go mod tidy)
+// (echo "vet:"; go vet || exit 1; echo "build:"; go build -ldflags="-X main.version=$(git describe --always --long --dirty) -X main.release=$(git describe --tags --abbrev=0)" -o PowerVS-Check-Create *.go || exit 1; echo "run:"; ./PowerVS-Check check-create -apiKey "..." -metadata metadata.json -shouldDebug true)
 
 package main
 
@@ -37,22 +37,22 @@ import (
 var (
 	// Replaced with:
 	//   -ldflags="-X main.version=$(git describe --always --long --dirty)"
-	version        = "undefined"
-	release        = "undefined"
+	version = "undefined"
+	release = "undefined"
 
-	shouldDebug    = false
-	shouldDelete   = false
+	shouldDebug  = false
+	shouldDelete = false
 
-	log            *logrus.Logger
+	log *logrus.Logger
 )
 
 func printUsage(executableName string) {
-	fmt.Fprintf(os.Stderr, "Usage: %s [ " +
-		"check-ci | " +
-		"check-create | " +
-		"check-kubeconfig | " +
-		"check-capi-kubeconfig | " +
-		"create-jumpbox " +
+	fmt.Fprintf(os.Stderr, "Usage: %s [ "+
+		"check-ci | "+
+		"check-create | "+
+		"check-kubeconfig | "+
+		"check-capi-kubeconfig | "+
+		"create-jumpbox "+
 		"]\n", executableName)
 }
 
@@ -117,7 +117,7 @@ func main() {
 	}
 }
 
-func initializeRunnableObjects (services *Services, robjsFuncs []NewRunnableObjectsEntry) ([]RunnableObject, error) {
+func initializeRunnableObjects(services *Services, robjsFuncs []NewRunnableObjectsEntry) ([]RunnableObject, error) {
 	var (
 		robjsResult    []RunnableObject
 		errs           []error
@@ -194,9 +194,9 @@ func checkCiCommand(checkCiFlags *flag.FlagSet, args []string) error {
 		metadata       *Metadata
 		services       *Services
 		robjsFuncs     = []NewRunnableObjectsEntry{
-			{ NewVpc,                "Virtual Private Cloud"  },
-			{ NewTransitGateway,     "Transit Gateway"        },
-			{ NewServiceInstance,    "Power Service Instance" },
+			{NewVpc, "Virtual Private Cloud"},
+			{NewTransitGateway, "Transit Gateway"},
+			{NewServiceInstance, "Power Service Instance"},
 		}
 		robjsCluster   []RunnableObject
 		robjObjectName string
@@ -225,9 +225,9 @@ func checkCiCommand(checkCiFlags *flag.FlagSet, args []string) error {
 		out = io.Discard
 	}
 	log = &logrus.Logger{
-		Out: out,
+		Out:       out,
 		Formatter: new(logrus.TextFormatter),
-		Level: logrus.DebugLevel,
+		Level:     logrus.DebugLevel,
 	}
 
 	if *ptrApiKey == "" {
@@ -266,7 +266,7 @@ func checkCiCommand(checkCiFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("Error: Could not create a Services object (%s)!\n", err)
 	}
 
-	robjsCluster, err = initializeRunnableObjects (services, robjsFuncs)
+	robjsCluster, err = initializeRunnableObjects(services, robjsFuncs)
 	if err != nil {
 		return err
 	}
@@ -296,13 +296,13 @@ func checkCreateCommand(checkCreateFlags *flag.FlagSet, args []string) error {
 		metadata       *Metadata
 		services       *Services
 		robjsFuncs     = []NewRunnableObjectsEntry{
-			{ NewVpc,                "Virtual Private Cloud"  },
-			{ NewCloudObjectStorage, "Cloud Object Storage"   },
-			{ NewTransitGateway,     "Transit Gateway"        },
-			{ NewLoadBalancer,       "Load Balancer"          },
-			{ NewServiceInstance,    "Power Service Instance" },
-			{ NewVpcInstance,        "Cloud VM"               },
-			{ NewDNS,                "Domain Name Service"    },
+			{NewVpc, "Virtual Private Cloud"},
+			{NewCloudObjectStorage, "Cloud Object Storage"},
+			{NewTransitGateway, "Transit Gateway"},
+			{NewLoadBalancer, "Load Balancer"},
+			{NewServiceInstance, "Power Service Instance"},
+			{NewVpcInstance, "Cloud VM"},
+			{NewDNS, "Domain Name Service"},
 		}
 		robjsCluster   []RunnableObject
 		robjObjectName string
@@ -330,9 +330,9 @@ func checkCreateCommand(checkCreateFlags *flag.FlagSet, args []string) error {
 		out = io.Discard
 	}
 	log = &logrus.Logger{
-		Out: out,
+		Out:       out,
 		Formatter: new(logrus.TextFormatter),
-		Level: logrus.DebugLevel,
+		Level:     logrus.DebugLevel,
 	}
 
 	if *ptrApiKey == "" {
@@ -363,7 +363,7 @@ func checkCreateCommand(checkCreateFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("Error: Could not create a Services object (%s)!\n", err)
 	}
 
-	robjsCluster, err = initializeRunnableObjects (services, robjsFuncs)
+	robjsCluster, err = initializeRunnableObjects(services, robjsFuncs)
 	if err != nil {
 		return err
 	}
@@ -505,7 +505,7 @@ func checkKubeconfigCommand(checkKubeconfigFlags *flag.FlagSet, args []string) e
 		out            io.Writer
 		ptrShouldDebug *string
 		ptrKubeconfig  *string
-		cmds           = []string {
+		cmds           = []string{
 			"oc --request-timeout=5s get clusterversion",
 			"oc --request-timeout=5s get co",
 			"oc --request-timeout=5s get nodes -o=wide",
@@ -525,13 +525,13 @@ func checkKubeconfigCommand(checkKubeconfigFlags *flag.FlagSet, args []string) e
 			"oc --request-timeout=5s get pods -n openshift-machine-api",
 			"oc --request-timeout=5s describe co/machine-config",
 		}
-		pipeCmds       = [][]string {
-			[]string{
+		pipeCmds = [][]string{
+			{
 				"oc --request-timeout=5s get pods -A -o=wide",
 				"sed -e /\\(Running\\|Completed\\)/d",
 			},
 		}
-		err            error
+		err error
 	)
 
 	ptrShouldDebug = checkKubeconfigFlags.String("shouldDebug", "false", "Should output debug output")
@@ -554,9 +554,9 @@ func checkKubeconfigCommand(checkKubeconfigFlags *flag.FlagSet, args []string) e
 		out = io.Discard
 	}
 	log = &logrus.Logger{
-		Out: out,
+		Out:       out,
 		Formatter: new(logrus.TextFormatter),
-		Level: logrus.DebugLevel,
+		Level:     logrus.DebugLevel,
 	}
 
 	if *ptrKubeconfig == "" {
@@ -587,21 +587,21 @@ func checkCapiKubeconfigCommand(checkCapiKubeconfigFlags *flag.FlagSet, args []s
 		out            io.Writer
 		ptrShouldDebug *string
 		ptrKubeconfig  *string
-		cmds           = [][]string {
-			[]string{
+		cmds           = [][]string{
+			{
 				"oc get ibmpowervscluster -n openshift-cluster-api-guests -o json",
 				"jq -r .items[].status.conditions[]",
 			},
-			[]string{
+			{
 				"oc get ibmpowervsimage -n openshift-cluster-api-guests -o json",
 				"jq -r .items[].status.conditions[]",
 			},
-			[]string{
+			{
 				"oc get ibmpowervsmachines -n openshift-cluster-api-guests -o json",
 				"jq -r .items[].status.conditions[]",
 			},
 		}
-		err            error
+		err error
 	)
 
 	ptrShouldDebug = checkCapiKubeconfigFlags.String("shouldDebug", "false", "Should output debug output")
@@ -624,9 +624,9 @@ func checkCapiKubeconfigCommand(checkCapiKubeconfigFlags *flag.FlagSet, args []s
 		out = io.Discard
 	}
 	log = &logrus.Logger{
-		Out: out,
+		Out:       out,
 		Formatter: new(logrus.TextFormatter),
-		Level: logrus.DebugLevel,
+		Level:     logrus.DebugLevel,
 	}
 
 	if *ptrKubeconfig == "" {
@@ -656,12 +656,12 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 		metadata       *Metadata
 		services       *Services
 		robjsFuncs     = []NewRunnableObjectsEntry{
-			{ NewVpc,                "Virtual Private Cloud"  },
-			{ NewServiceInstance,    "Power Service Instance" },
+			{NewVpc, "Virtual Private Cloud"},
+			{NewServiceInstance, "Power Service Instance"},
 		}
-		robjsCluster   []RunnableObject
-		vpc            *Vpc
-		si             *ServiceInstance
+		robjsCluster    []RunnableObject
+		vpc             *Vpc
+		si              *ServiceInstance
 		name            string
 		resourceGroupID string
 		imageID         string
@@ -670,7 +670,7 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 		subnetID        string
 		keyID           string
 		vpcID           string
-		err            error
+		err             error
 	)
 
 	ptrApiKey = createJumpboxFlags.String("apiKey", "", "Your IBM Cloud API key")
@@ -696,9 +696,9 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 		out = io.Discard
 	}
 	log = &logrus.Logger{
-		Out: out,
+		Out:       out,
 		Formatter: new(logrus.TextFormatter),
-		Level: logrus.DebugLevel,
+		Level:     logrus.DebugLevel,
 	}
 
 	if *ptrApiKey == "" {
@@ -728,7 +728,7 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 		return fmt.Errorf("Error: Could not create a Services object (%s)!\n", err)
 	}
 
-	robjsCluster, err = initializeRunnableObjects (services, robjsFuncs)
+	robjsCluster, err = initializeRunnableObjects(services, robjsFuncs)
 	if err != nil {
 		return err
 	}
@@ -754,7 +754,7 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 	if si == nil {
 		return fmt.Errorf("Error: Could not find Service Instance!")
 	}
-	
+
 	if *ptrImageName == "" {
 		images, err := vpc.ListImages()
 		if err != nil {
@@ -860,31 +860,31 @@ func createJumpboxCommand(createJumpboxFlags *flag.FlagSet, args []string) error
 		fmt.Printf("Creating instance %s\n", name)
 
 		instancePrototype := &vpcv1.InstancePrototypeInstanceByImage{
-			Keys:                    []vpcv1.KeyIdentityIntf{
+			Keys: []vpcv1.KeyIdentityIntf{
 				&vpcv1.KeyIdentityByID{
 					ID: &keyID,
 				},
 			},
-			Name:                    &name,
-			ResourceGroup:           &vpcv1.ResourceGroupIdentity{
+			Name: &name,
+			ResourceGroup: &vpcv1.ResourceGroupIdentity{
 				ID: &resourceGroupID,
 			},
-			Profile:                 &vpcv1.InstanceProfileIdentityByName{
+			Profile: &vpcv1.InstanceProfileIdentityByName{
 				Name: &instanceProfile,
 			},
-			VPC:                     &vpcv1.VPCIdentityByID{
+			VPC: &vpcv1.VPCIdentityByID{
 				ID: &vpcID,
 			},
-			Image:                   &vpcv1.ImageIdentityByID{
+			Image: &vpcv1.ImageIdentityByID{
 				ID: &imageID,
 			},
 			PrimaryNetworkInterface: &vpcv1.NetworkInterfacePrototype{
-				Name:   &name,
+				Name: &name,
 				Subnet: &vpcv1.SubnetIdentityByID{
 					ID: &subnetID,
 				},
 			},
-			Zone:                    &vpcv1.ZoneIdentityByName{
+			Zone: &vpcv1.ZoneIdentityByName{
 				Name: &zone,
 			},
 		}
