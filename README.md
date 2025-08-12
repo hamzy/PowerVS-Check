@@ -5,7 +5,7 @@ CLI opitons:
 
 [TOC]
 
-##check-ci
+## check-ci
 
 This is for checking existing CI objects.
 
@@ -34,7 +34,7 @@ args:
 
 - `shouldDebug` defauts to `false`
 
-##check-capi-kubeconfig
+## check-capi-kubeconfig
 
 This is for checking the progress of an ongoing `create cluster` operation of the OpenShift IPI installer.  Run this in another window while the installer deploys a cluster.  This is for the first part of a CAPI installation.
 
@@ -47,7 +47,7 @@ args:
 
 - `shouldDebug` defauts to `false`
 
-##check-create
+## check-create
 
 This is for checking the progress of an ongoing `create cluster` operation of the OpenShift IPI installer.  Run this in another window while the installer deploys a cluster.  This is for the second part of a CAPI installation.
 
@@ -62,7 +62,7 @@ args:
 
 - `shouldDebug` defauts to `false`
 
-##check-kubeconfig
+## check-kubeconfig
 
 This is for checking the progress of an ongoing `create cluster` operation of the OpenShift IPI installer.  Run this in another window while the installer deploys a cluster.  This is for the second part of a CAPI installation.
 
@@ -75,7 +75,7 @@ args:
 
 - `shouldDebug` defauts to `false`
 
-##create-jumpbox
+## create-jumpbox
 
 This is used to create an accessible VM that can be used to then connect to the OpenShift cluster's bootstrap, master, and worker VMs.
 
