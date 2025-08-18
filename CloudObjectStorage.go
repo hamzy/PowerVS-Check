@@ -17,9 +17,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/IBM/ibm-cos-sdk-go/aws"
+	"github.com/IBM/ibm-cos-sdk-go/aws/awserr"
+	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
 	"github.com/IBM/ibm-cos-sdk-go/aws/session"
 	"github.com/IBM/ibm-cos-sdk-go/service/s3"
+	"github.com/IBM/ibm-cos-sdk-go/service/s3/s3manager"
 
 	// https://raw.githubusercontent.com/IBM/platform-services-go-sdk/refs/heads/main/resourcecontrollerv2/resource_controller_v2.go
 	"github.com/IBM/platform-services-go-sdk/resourcecontrollerv2"
@@ -27,6 +32,8 @@ import (
 
 type CloudObjectStorage struct {
 	name string
+
+	region string
 
 	services *Services
 
@@ -46,7 +53,6 @@ const (
 func NewCloudObjectStorage(services *Services) ([]RunnableObject, []error) {
 	var (
 		cosName        string
-		region         string
 		controllerSvc  *resourcecontrollerv2.ResourceControllerV2
 		ctx            context.Context
 		cancel         context.CancelFunc
@@ -74,10 +80,13 @@ func NewCloudObjectStorage(services *Services) ([]RunnableObject, []error) {
 	}
 	cos.name = cosName
 
-	region = services.GetMetadata().GetRegion()
-	log.Debugf("NewCloudObjectStorage: region = %s", region)
+	cos.region, err = services.GetMetadata().GetVPCRegion()
+	if err != nil {
+		return []RunnableObject{cos}, []error{err}
+	}
+	log.Debugf("NewCloudObjectStorage: region = %s", cos.region)
 
-	cos.serviceEndpoint = fmt.Sprintf("s3.%s.cloud-object-storage.appdomain.cloud", region)
+	cos.serviceEndpoint = fmt.Sprintf("s3.%s.cloud-object-storage.appdomain.cloud", cos.region)
 
 	controllerSvc = services.GetControllerSvc()
 
@@ -127,6 +136,11 @@ func NewCloudObjectStorage(services *Services) ([]RunnableObject, []error) {
 		cos.name = innerCosName
 		cos.innerCos = innerCos
 
+		err = cos.createClients()
+		if err != nil {
+			return nil, []error{fmt.Errorf("Error: NewCloudObjectStorage createClients returns %v", err)}
+		}
+
 		if idxCos > 0 {
 			log.Debugf("NewCloudObjectStorage: appending to coses")
 
@@ -143,6 +157,49 @@ func NewCloudObjectStorage(services *Services) ([]RunnableObject, []error) {
 	}
 
 	return coses, errs
+}
+
+func (cos *CloudObjectStorage) createClients() error {
+	var (
+		options session.Options
+		err     error
+	)
+
+	if cos.innerCos == nil {
+		return fmt.Errorf("Error: createClients called on nil CloudObjectStorage")
+	}
+
+	options.Config = *aws.NewConfig().
+		WithRegion(cos.region).
+		WithEndpoint(cos.serviceEndpoint).
+		WithCredentials(ibmiam.NewStaticCredentials(
+			aws.NewConfig(),
+			"https://iam.cloud.ibm.com/identity/token",
+			cos.services.GetApiKey(),
+			*cos.innerCos.GUID,
+		)).
+		WithS3ForcePathStyle(true)
+
+	// https://github.com/IBM/ibm-cos-sdk-go/blob/master/aws/session/session.go#L268
+	cos.awsSession, err = session.NewSessionWithOptions(options)
+	if err != nil {
+		log.Fatalf("Error: NewSessionWithOptions returns %v", err)
+		return err
+	}
+	log.Debugf("createClients: cos.awsSession = %+v", cos.awsSession)
+	if cos.awsSession == nil {
+		log.Fatalf("Error: cos.awsSession is nil")
+		return fmt.Errorf("Error: cos.awsSession is nil")
+	}
+
+	cos.s3Client = s3.New(cos.awsSession)
+	log.Debugf("createClients: cos.s3Client = %+v", cos.s3Client)
+	if cos.s3Client == nil {
+		log.Fatalf("Error: cos.s3Client is nil")
+		return fmt.Errorf("Error: cos.s3Client is nil")
+	}
+
+	return err
 }
 
 func findCos(name string, controllerSvc *resourcecontrollerv2.ResourceControllerV2, ctx context.Context) ([]string, error) {
@@ -215,6 +272,151 @@ func findCos(name string, controllerSvc *resourcecontrollerv2.ResourceController
 	return []string{}, nil
 }
 
+func isBucketNotFound(err interface{}) bool {
+	log.Debugf("isBucketNotFound: err = %v", err)
+	log.Debugf("isBucketNotFound: err.(type) = %T", err)
+
+	if err == nil {
+		return false
+	}
+
+	// vet: ./CloudObjectStorage.go:443:14: use of .(type) outside type switch
+	// if _, ok := err.(type); !ok {
+
+	switch err.(type) {
+	case s3.RequestFailure:
+		log.Debugf("isBucketNotFound: err.(type) s3.RequestFailure")
+		if reqerr, ok := err.(s3.RequestFailure); ok {
+			log.Debugf("isBucketNotFound: reqerr.Code() = %v", reqerr.Code())
+			switch reqerr.Code() {
+			case s3.ErrCodeNoSuchBucket:
+				return true
+			case "NotFound":
+				return true
+			case "Forbidden":
+				return true
+			}
+			log.Debugf("isBucketNotFound: continuing")
+		} else {
+			log.Debugf("isBucketNotFound: s3.RequestFailure !ok")
+		}
+	case awserr.Error:
+		log.Debugf("isBucketNotFound: err.(type) awserr.Error")
+		if reqerr, ok := err.(awserr.Error); ok {
+			log.Debugf("isBucketNotFound: reqerr.Code() = %v", reqerr.Code())
+			switch reqerr.Code() {
+			case s3.ErrCodeNoSuchBucket:
+				return true
+			case "NotFound":
+				return true
+			case "Forbidden":
+				return true
+			}
+			log.Debugf("isBucketNotFound: continuing")
+		} else {
+			log.Debugf("isBucketNotFound: s3.RequestFailure !ok")
+		}
+	}
+
+	// @TODO investigate
+	switch s3Err := err.(type) {
+	case awserr.Error:
+		if s3Err.Code() == "NoSuchBucket" {
+			return true
+		}
+		origErr := s3Err.OrigErr()
+		if origErr != nil {
+			return isBucketNotFound(origErr)
+		}
+	case s3manager.Error:
+		if s3Err.OrigErr != nil {
+			return isBucketNotFound(s3Err.OrigErr)
+		}
+	case s3manager.Errors:
+		if len(s3Err) == 1 {
+			return isBucketNotFound(s3Err[0])
+		}
+		// Weird: This does not match?!
+		// case s3.RequestFailure:
+	}
+
+	return false
+}
+
+func (cos *CloudObjectStorage) examineCOS() error {
+	var (
+		ctx              context.Context
+		cancel           context.CancelFunc
+		bucket           string
+		headBucketInput  *s3.HeadBucketInput
+		headBucketOutput *s3.HeadBucketOutput
+		//		listBucketOutput  *s3.ListBucketsOutput
+		listObjectsInput  *s3.ListObjectsInput
+		listObjectsOutput *s3.ListObjectsOutput
+		s3Object          *s3.Object
+		expectedObjects   = map[string]bool{
+			"master-0": false,
+			"master-1": false,
+			"master-2": false,
+		}
+		allFound bool
+		err      error
+	)
+
+	ctx, cancel = cos.services.GetContextWithTimeout()
+	defer cancel()
+
+	bucket = fmt.Sprintf("%s-bootstrap-ign", cos.services.GetMetadata().GetInfraID())
+	log.Debugf("examineCOS: bucket = %s", bucket)
+
+	headBucketInput = &s3.HeadBucketInput{
+		Bucket: aws.String(bucket),
+	}
+	headBucketOutput, err = cos.s3Client.HeadBucketWithContext(ctx, headBucketInput)
+	if isBucketNotFound(err) {
+		return fmt.Errorf("bucket %s not found!", bucket)
+	}
+	log.Debugf("examineCOS: headBucketOutput = %+v", *headBucketOutput)
+
+	//	listBucketOutput, err = cos.s3Client.ListBucketsWithContext(ctx, &s3.ListBucketsInput{})
+	//	if err != nil {
+	//		return err
+	//	}
+	//	log.Debugf("examineCOS: listBucketOutput = %+v", *listBucketOutput)
+
+	listObjectsInput = &s3.ListObjectsInput{
+		Bucket: aws.String(bucket),
+	}
+	listObjectsOutput, err = cos.s3Client.ListObjectsWithContext(ctx, listObjectsInput)
+	if err != nil {
+		return err
+	}
+	log.Debugf("examineCOS: listObjectsOutput = %+v", *listObjectsOutput)
+
+	for _, s3Object = range listObjectsOutput.Contents {
+		fmt.Printf("Found %s (size %d) in %s\n", *s3Object.Key, int64(*s3Object.Size), bucket)
+
+		for expectedObjectKey := range expectedObjects {
+			if strings.Contains(*s3Object.Key, expectedObjectKey) {
+				expectedObjects[expectedObjectKey] = true
+			}
+		}
+	}
+	log.Debugf("examineCOS: expectedObjects = %+v\n", expectedObjects)
+
+	allFound = true
+	for expectedObjectKey := range expectedObjects {
+		if !expectedObjects[expectedObjectKey] {
+			allFound = false
+		}
+	}
+	if !allFound {
+		return fmt.Errorf("Did not find all master ignition files")
+	}
+
+	return nil
+}
+
 func (cos *CloudObjectStorage) CRN() (string, error) {
 	if cos.innerCos == nil || cos.innerCos.CRN == nil {
 		return "(error)", nil
@@ -244,17 +446,32 @@ func (cos *CloudObjectStorage) CiStatus(shouldClean bool) {
 }
 
 func (cos *CloudObjectStorage) ClusterStatus() {
+	var (
+		isOk bool
+		err  error
+	)
+
 	if cos.innerCos == nil {
 		fmt.Printf("%s: Could not find a COS named %s\n", cosObjectName, cos.name)
 		return
 	}
 
+	isOk = true
+
 	if *cos.innerCos.State != "active" {
-		fmt.Printf("%s %s is NOTOK (%s)\n", cosObjectName, cos.name, *cos.innerCos.State)
-		return
+		isOk = false
+		fmt.Printf("%s %s is NOTOK state is not active (%s)\n", cosObjectName, cos.name, *cos.innerCos.State)
 	}
 
-	fmt.Printf("%s %s is OK.\n", cosObjectName, cos.name)
+	err = cos.examineCOS()
+	if err != nil {
+		isOk = false
+		fmt.Printf("%s %s is NOTOK (%v)\n", cosObjectName, cos.name, err)
+	}
+
+	if isOk {
+		fmt.Printf("%s %s is OK.\n", cosObjectName, cos.name)
+	}
 }
 
 func (cos *CloudObjectStorage) Priority() (int, error) {

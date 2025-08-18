@@ -421,6 +421,34 @@ func runCommand(ptrKubeconfig *string, cmdline string) error {
 	return err
 }
 
+func runSplitCommand(acmdline []string) error {
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+		cmd    *exec.Cmd
+		out    []byte
+		err    error
+	)
+
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	if len(acmdline) == 0 {
+		return fmt.Errorf("runSplitCommand has empty command")
+	} else if len(acmdline) == 1 {
+		cmd = exec.CommandContext(ctx, acmdline[0])
+	} else {
+		cmd = exec.CommandContext(ctx, acmdline[0], acmdline[1:]...)
+	}
+
+	fmt.Println("8<--------8<--------8<--------8<--------8<--------8<--------8<--------8<--------")
+	fmt.Println(acmdline)
+	out, err = cmd.CombinedOutput()
+	fmt.Println(string(out))
+
+	return err
+}
+
 func runTwoCommands(ptrKubeconfig *string, cmdline1 string, cmdline2 string) error {
 	var (
 		acmdline1 []string
@@ -637,6 +665,21 @@ func checkCapiKubeconfigCommand(checkCapiKubeconfigFlags *flag.FlagSet, args []s
 
 	for _, twoCmds := range cmds {
 		err = runTwoCommands(ptrKubeconfig, twoCmds[0], twoCmds[1])
+		if err != nil {
+			fmt.Printf("Error: could not run command: %v\n", err)
+		}
+	}
+
+	if idxCapiOutput := strings.Index(*ptrKubeconfig, ".clusterapi_output"); idxCapiOutput > -1 {
+		firstPart := (*ptrKubeconfig)[0:idxCapiOutput]
+
+		err = runSplitCommand([]string{
+			"grep",
+			"--color",
+			"-E",
+			"(Cluster API|level=info|level=warning|level=error|Created manifest|InfraReady|PostProvision|[Ff]ound internal [Ii][Pp] for VM from DHCP lease)",
+			fmt.Sprintf("%s%s", firstPart, ".openshift_install.log"),
+		})
 		if err != nil {
 			fmt.Printf("Error: could not run command: %v\n", err)
 		}
