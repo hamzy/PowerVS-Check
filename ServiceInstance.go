@@ -87,10 +87,12 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 	)
 
 	infraID = services.GetMetadata().GetInfraID()
-	dhcpName = fmt.Sprintf("DHCPSERVER%s", infraID)
-	rhcosName = fmt.Sprintf("rhcos-%s", infraID)
-	sshKeyName = fmt.Sprintf("%s-sshkey", infraID)
-	networkName = fmt.Sprintf("%s-network", infraID)
+	if infraID != "" {
+		dhcpName = fmt.Sprintf("DHCPSERVER%s", infraID)
+		rhcosName = fmt.Sprintf("rhcos-%s", infraID)
+		sshKeyName = fmt.Sprintf("%s-sshkey", infraID)
+		networkName = fmt.Sprintf("%s-network", infraID)
+	}
 
 	si = &ServiceInstance{
 		name:        "",

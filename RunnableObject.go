@@ -14,6 +14,11 @@
 
 package main
 
+import (
+	"fmt"
+	"os"
+)
+
 type RunnableObject interface {
 	CRN() (string, error)
 	Name() (string, error)
@@ -59,4 +64,70 @@ func BubbleSort(input []RunnableObject) []RunnableObject {
 		}
 	}
 	return input
+}
+
+func initializeRunnableObjects(services *Services, robjsFuncs []NewRunnableObjectsEntry) ([]RunnableObject, error) {
+	var (
+		robjsResult    []RunnableObject
+		errs           []error
+		robjObjectName string
+		crnName        string
+		robjsCluster   = make([]RunnableObject, 0, 5)
+		err            error
+	)
+
+	// Loop through New functions which return an array of runnable objects.
+	for _, nroe := range robjsFuncs {
+		fmt.Fprintf(os.Stderr, "Querying the %s...\n", nroe.Name)
+
+		// Call the New function.
+		robjsResult, errs = nroe.NRO(services)
+
+		// Loop through the returned errors.
+		for _, err = range errs {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: Could not create a %s object (%v)!\n", nroe.Name, err)
+			}
+		}
+
+		// Loop through the array of returned results.
+		for _, robj := range robjsResult {
+			// What is the runnable object's name?
+			robjObjectName, err = robj.ObjectName()
+			if err != nil {
+				return nil, fmt.Errorf("Error: Could not figure out the objects' name! (%s)\n", err)
+			}
+
+			// Also make sure the priority is valid.
+			_, err = robj.Priority()
+			if err != nil {
+				return nil, fmt.Errorf("Error: Could not get the priority for %s: %s\n", robjObjectName, err)
+			}
+
+			// Append the runnable object.
+			log.Debugf("Appending %s %+v", robjObjectName, robj)
+			robjsCluster = append(robjsCluster, robj)
+
+			// What is the runnable object's CRN?
+			crnName, err = robj.CRN()
+			if err == nil {
+				log.Debugf("%s.CRN = %s", robjObjectName, crnName)
+			} else {
+				log.Debugf("ERROR: %s.CRN: %v", robjObjectName, err)
+			}
+		}
+	}
+
+	// Run each object.
+	for _, robj := range robjsCluster {
+		robjObjectName, _ = robj.ObjectName()
+		fmt.Fprintf(os.Stderr, "Running the %s...\n", robjObjectName)
+
+		err = robj.Run()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return robjsCluster, nil
 }
