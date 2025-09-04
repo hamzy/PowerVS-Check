@@ -32,6 +32,7 @@ type clusterConditions struct {
 }
 
 type statusCondition struct {
+	Name   string
 	Status bool
 	Type   string
 }
@@ -76,6 +77,14 @@ func getJsonMapValue(jsonMap map[string]any, key string, bufferedChannel chan er
 	return
 }
 
+func getJsonMapString(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapString string) {
+	jsonMapString, ok := jsonMap[key].(string)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMapString: jsonMap[%s] returned error", key)
+	}
+	return
+}
+
 func getJsonMap(unknown any, bufferedChannel chan error) (jsonMap map[string]any) {
 	jsonMap, ok := unknown.(map[string]any)
 	if !ok {
@@ -98,37 +107,34 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []
 		bufferedChannel<-fmt.Errorf("getPVSCluster: len of JSON items != 1 (%d)", len(rootItemArray))
 		return aconditions
 	}
+
 	rootItemMap = getJsonMap(rootItemArray[0], bufferedChannel)
 	statusMap = getJsonMapValue(rootItemMap, "status", bufferedChannel)
 	conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
 
 	aconditions = make([]statusCondition, 0)
-	for _, item := range conditionsArray {
+
+	for _, conditionItem := range conditionsArray {
 		var (
-			itemMap    map[string]interface{}
-			status     bool
-			stringType string
-			ok         bool
-			sc         statusCondition
+			conditionItemMap map[string]any
+			status           bool
+			stringType       string
+			sc               statusCondition
 		)
 
-		itemMap = getJsonMap(item, bufferedChannel)
+		conditionItemMap = getJsonMap(conditionItem, bufferedChannel)
 
-		switch itemMap["status"] {
+		switch conditionItemMap["status"] {
 		case "True":
 			status = true
 		case "False":
 			status = false
 		default:
-			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap status: %v", itemMap["status"])
+			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap status: %v", conditionItemMap["status"])
 			return aconditions
 		}
 
-		stringType, ok = itemMap["type"].(string)
-		if !ok {
-			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap type: %v", itemMap["type"])
-			return aconditions
-		}
+		stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
 
 		sc = statusCondition{
 			Status: status,
@@ -140,6 +146,68 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []
 	}
 
 	return aconditions
+}
+
+func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) (aconditions []statusCondition) {
+	var (
+		rootItemArray []any
+	)
+
+	rootItemArray = getJsonArrayValue(jsonPVSMachines, "items", bufferedChannel)
+
+	aconditions = make([]statusCondition, 0)
+
+	for _, rootItem := range rootItemArray {
+		var (
+			itemMap         map[string]any
+			metadataMap     map[string]any
+			name            string
+			statusMap       map[string]any
+			conditionsArray []any
+		)
+
+		itemMap = getJsonMap(rootItem, bufferedChannel)
+
+		metadataMap = getJsonMapValue(itemMap, "metadata", bufferedChannel)
+		name = getJsonMapString(metadataMap, "name", bufferedChannel)
+
+		statusMap = getJsonMapValue(itemMap, "status", bufferedChannel)
+		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
+
+		for _, conditionItem := range conditionsArray {
+			var (
+				conditionItemMap map[string]any
+				status           bool
+				stringType       string
+				sc               statusCondition
+			)
+
+			conditionItemMap = getJsonMap(conditionItem, bufferedChannel)
+
+			switch conditionItemMap["status"] {
+			case "True":
+				status = true
+			case "False":
+				status = false
+			default:
+				bufferedChannel<-fmt.Errorf("getPVSMachines: Could not convert itemMap status: %v", itemMap["status"])
+				return aconditions
+			}
+
+			stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
+
+			sc = statusCondition{
+				Name:   name,
+				Status: status,
+				Type:   stringType,
+			}
+			log.Debugf("sc = %+v", sc)
+
+			aconditions = append(aconditions, sc)
+		}
+	}
+
+	return
 }
 
 func getClusterOperator(jsonCo map[string]interface{}, name string) (clusterConditions, error) {

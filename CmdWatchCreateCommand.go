@@ -86,7 +86,15 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 	return nil
 }
 
-func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+func updateWindow(capiWindows map[string]*tview.TextView, element string, text string) {
+	if useTview {
+		capiWindows[element].SetText(text)
+	} else {
+		fmt.Println(text)
+	}
+}
+
+func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
 	var (
 		cmdOcGetPVSCluster = []string{
 			"oc", "get", "ibmpowervscluster", "-n", "openshift-cluster-api-guests", "-o", "json",
@@ -98,17 +106,9 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 		err                error
 	)
 
-	updateWindow := func(element string, text string) {
-		if useTview {
-			capiWindows[element].SetText(text)
-		} else {
-			fmt.Println(text)
-		}
-	}
-
 	for true {
 		if true {
-			jsonPVSCluster, err = parseJsonFile("ibmpowervscluster.json")
+			jsonPVSCluster, err = parseJsonFile("ibmpowervscluster2.json")
 		} else {
 			jsonPVSCluster, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSCluster)
 		}
@@ -116,7 +116,7 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 			err = fmt.Errorf("Error: could not run command: %v", err)
 			break
 		}
-		log.Debugf("updateCAPIPhase: jsonPVSCluster = %+v", jsonPVSCluster)
+		log.Debugf("updateCAPIPhase1: jsonPVSCluster = %+v", jsonPVSCluster)
 
 		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
 
@@ -145,26 +145,26 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 		ready = true
 		for _, condition := range aconditions {
 			_, ok = capiWindows[condition.Type]
-			log.Debugf("updateCAPIPhase: condition = %+v, ok = %v", condition, ok)
+			log.Debugf("updateCAPIPhase1: condition = %+v, ok = %v", condition, ok)
 			if !ok {
 				continue
 			}
 			if condition.Status {
-				updateWindow(condition.Type, fmt.Sprintf("%s is READY", condition.Type))
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
 			} else {
 				ready = false
-				updateWindow(condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
 			}
 		}
 
 		if ready {
-			log.Debugf("updateCAPIPhase: ready = %v, len(aconditions) = %d", ready, len(aconditions))
+			log.Debugf("updateCAPIPhase1: ready = %v, len(aconditions) = %d", ready, len(aconditions))
 			if len(aconditions) == 8 {
 				err = nil
 				break
 			}
 		} else {
-			log.Debugf("updateCAPIPhase: ready = %v", ready)
+			log.Debugf("updateCAPIPhase1: ready = %v", ready)
 		}
 
 		time.Sleep(10 * time.Second)
@@ -176,7 +176,92 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 
 	chanResult <- err
 
-	log.Debugf("updateCAPIPhase: DONE!")
+	log.Debugf("updateCAPIPhase1: DONE!")
+}
+
+func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+	var (
+		cmdOcGetPVSCluster = []string{
+			"oc", "get", "ibmpowervsmachines", "-n", "openshift-cluster-api-guests", "-o", "json",
+		}
+		jsonPVSMachines    map[string]interface{}
+		aconditions        []statusCondition
+		ok                 bool
+		ready              bool
+		err                error
+	)
+
+	for true {
+		if true {
+			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines2.json")
+		} else {
+			jsonPVSMachines, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSCluster)
+		}
+		if err != nil {
+			err = fmt.Errorf("Error: could not run command: %v", err)
+			break
+		}
+		log.Debugf("updateCAPIPhase2: jsonPVSMachines = %+v", jsonPVSMachines)
+
+		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		aconditions = getPVSMachines(jsonPVSMachines, bufferedChannel)
+
+		stillHaveErrors := true
+		var firstError error
+		for stillHaveErrors {
+			select {
+			case err = <-bufferedChannel:
+				log.Debugf("getPVSMachines returned error: %+v", err)
+				if firstError == nil {
+					firstError = err
+				}
+			default:
+				stillHaveErrors = false
+			}
+		}
+		if firstError != nil {
+			break
+		}
+
+		ready = true
+		for _, condition := range aconditions {
+			_, ok = capiWindows[condition.Type]
+			log.Debugf("updateCAPIPhase2: condition = %+v, ok = %v", condition, ok)
+			if !ok {
+				continue
+			}
+			if condition.Status {
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
+			} else {
+				ready = false
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
+			}
+		}
+
+		if ready {
+			log.Debugf("updateCAPIPhase2: ready = %v, len(aconditions) = %d", ready, len(aconditions))
+			if len(aconditions) == 8 {
+				err = nil
+				break
+			}
+		} else {
+			log.Debugf("updateCAPIPhase2: ready = %v", ready)
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
+	if useTview {
+		app.Stop()
+	}
+
+	chanResult <- err
+
+	log.Debugf("updateCAPIPhase2: DONE!")
 }
 
 func watchCAPIPhase(ptrKubeconfig *string) error {
@@ -219,7 +304,7 @@ func watchCAPIPhase(ptrKubeconfig *string) error {
 	chanResult = make(chan error)
 
 	if useTview {
-		go updateCAPIPhase(ptrKubeconfig, app, capiWindows, chanResult)
+		go updateCAPIPhase1(ptrKubeconfig, app, capiWindows, chanResult)
 
 //		time.Sleep(15*time.Second)
 
@@ -227,7 +312,9 @@ func watchCAPIPhase(ptrKubeconfig *string) error {
 			return err
 		}
 	} else {
-		go updateCAPIPhase(ptrKubeconfig, app, capiWindows, chanResult)
+//		go updateCAPIPhase1(ptrKubeconfig, app, capiWindows, chanResult)
+
+		go updateCAPIPhase2(ptrKubeconfig, app, capiWindows, chanResult)
 	}
 
 	log.Debugf("watchCAPIPhase: chan = %+v", <-chanResult)
