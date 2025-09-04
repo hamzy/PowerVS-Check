@@ -85,6 +85,22 @@ func getJsonMapString(jsonMap map[string]any, key string, bufferedChannel chan e
 	return
 }
 
+func getJsonMapBool(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapBool bool) {
+	jsonMapString, ok := jsonMap[key].(string)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMapBool: jsonMap[%s] returned error", key)
+	}
+	switch jsonMapString {
+	case "True":
+		jsonMapBool = true
+	case "False":
+		jsonMapBool = false
+	default:
+		bufferedChannel<-fmt.Errorf("getJsonMapBool: Could not convert jsonMapString (%s)", jsonMapString)
+	}
+	return
+}
+
 func getJsonMap(unknown any, bufferedChannel chan error) (jsonMap map[string]any) {
 	jsonMap, ok := unknown.(map[string]any)
 	if !ok {
@@ -93,13 +109,12 @@ func getJsonMap(unknown any, bufferedChannel chan error) (jsonMap map[string]any
 	return
 }
 
-func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []statusCondition {
+func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) (aconditions []statusCondition) {
 	var (
 		rootItemArray   []any
 		rootItemMap     map[string]any
 		statusMap       map[string]any
 		conditionsArray []any
-		aconditions     []statusCondition
 	)
 
 	rootItemArray = getJsonArrayValue(jsonPVSCluster, "items", bufferedChannel)
@@ -124,16 +139,7 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []
 
 		conditionItemMap = getJsonMap(conditionItem, bufferedChannel)
 
-		switch conditionItemMap["status"] {
-		case "True":
-			status = true
-		case "False":
-			status = false
-		default:
-			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap status: %v", conditionItemMap["status"])
-			return aconditions
-		}
-
+		status = getJsonMapBool(conditionItemMap, "status", bufferedChannel)
 		stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
 
 		sc = statusCondition{
@@ -145,7 +151,7 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []
 		aconditions = append(aconditions, sc)
 	}
 
-	return aconditions
+	return
 }
 
 func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) (aconditions []statusCondition) {
@@ -184,16 +190,7 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 
 			conditionItemMap = getJsonMap(conditionItem, bufferedChannel)
 
-			switch conditionItemMap["status"] {
-			case "True":
-				status = true
-			case "False":
-				status = false
-			default:
-				bufferedChannel<-fmt.Errorf("getPVSMachines: Could not convert itemMap status: %v", itemMap["status"])
-				return aconditions
-			}
-
+			status = getJsonMapBool(conditionItemMap, "status", bufferedChannel)
 			stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
 
 			sc = statusCondition{
@@ -205,6 +202,51 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 
 			aconditions = append(aconditions, sc)
 		}
+	}
+
+	return
+}
+
+func getPVSImage(jsonPVSImage map[string]any, bufferedChannel chan error) (aconditions []statusCondition) {
+	var (
+		rootItemArray   []any
+		rootItemMap     map[string]any
+		statusMap       map[string]any
+		conditionsArray []any
+	)
+
+	rootItemArray = getJsonArrayValue(jsonPVSImage, "items", bufferedChannel)
+	if len(rootItemArray) != 1 {
+		bufferedChannel<-fmt.Errorf("getPVSImage: len of JSON items != 1 (%d)", len(rootItemArray))
+		return aconditions
+	}
+
+	rootItemMap = getJsonMap(rootItemArray[0], bufferedChannel)
+	statusMap = getJsonMapValue(rootItemMap, "status", bufferedChannel)
+	conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
+
+	aconditions = make([]statusCondition, 0)
+
+	for _, conditionItem := range conditionsArray {
+		var (
+			conditionItemMap map[string]any
+			status           bool
+			stringType       string
+			sc               statusCondition
+		)
+
+		conditionItemMap = getJsonMap(conditionItem, bufferedChannel)
+
+		status = getJsonMapBool(conditionItemMap, "status", bufferedChannel)
+		stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
+
+		sc = statusCondition{
+			Status: status,
+			Type:   stringType,
+		}
+		log.Debugf("sc = %+v", sc)
+
+		aconditions = append(aconditions, sc)
 	}
 
 	return
