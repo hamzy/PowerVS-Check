@@ -108,7 +108,7 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 
 	for true {
 		if true {
-			jsonPVSCluster, err = parseJsonFile("/tmp/bob.json")
+			jsonPVSCluster, err = parseJsonFile("ibmpowervscluster.json")
 		} else {
 			jsonPVSCluster, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSCluster)
 		}
@@ -118,8 +118,27 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 		}
 		log.Debugf("updateCAPIPhase: jsonPVSCluster = %+v", jsonPVSCluster)
 
-		aconditions, err = getPVSCluster(jsonPVSCluster)
-		if err != nil {
+		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		aconditions = getPVSCluster(jsonPVSCluster, bufferedChannel)
+
+		stillHaveErrors := true
+		var firstError error
+		for stillHaveErrors {
+			select {
+			case err = <-bufferedChannel:
+				log.Debugf("getPVSCluster returned error: %+v", err)
+				if firstError == nil {
+					firstError = err
+				}
+			default:
+				stillHaveErrors = false
+			}
+		}
+		if firstError != nil {
 			break
 		}
 

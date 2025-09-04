@@ -60,42 +60,47 @@ func parseJsonFile(filename string) (map[string]interface{}, error) {
 	return jsonData, err
 }
 
-func getPVSCluster(jsonPVSCluster map[string]interface{}) ([]statusCondition, error) {
+func getJsonArrayValue(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonArrayValue []any) {
+	jsonArrayValue, ok := jsonMap[key].([]any)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonArrayValue: jsonMap[%s] returned error", key)
+	}
+	return
+}
+
+func getJsonMapValue(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapValue map[string]any) {
+	jsonMapValue, ok := jsonMap[key].(map[string]any)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMapValue: jsonMap[%s] returned error", key)
+	}
+	return
+}
+
+func getJsonMap(unknown any, bufferedChannel chan error) (jsonMap map[string]any) {
+	jsonMap, ok := unknown.(map[string]any)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMap: converting to map returned error")
+	}
+	return
+}
+
+func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) []statusCondition {
 	var (
-		rootItemArray   []interface{}
-		ok              bool
-		rootItemMap     map[string]interface{}
-		statusMap       map[string]interface{}
-		conditionsArray []interface{}
+		rootItemArray   []any
+		rootItemMap     map[string]any
+		statusMap       map[string]any
+		conditionsArray []any
 		aconditions     []statusCondition
 	)
 
-	rootItemArray, ok = jsonPVSCluster["items"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("getPVSCluster: Could not find JSON items")
-	}
-
+	rootItemArray = getJsonArrayValue(jsonPVSCluster, "items", bufferedChannel)
 	if len(rootItemArray) != 1 {
-		return nil, fmt.Errorf("getPVSCluster: len of JSON items != 1 (%d)", len(rootItemArray))
+		bufferedChannel<-fmt.Errorf("getPVSCluster: len of JSON items != 1 (%d)", len(rootItemArray))
+		return aconditions
 	}
-
-	rootItemMap, ok = rootItemArray[0].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("getPVSCluster: Could not convert to rootItemMap")
-	}
-	log.Debugf("rootItemMap = %+v", rootItemMap)
-
-	statusMap, ok = rootItemMap["status"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("getPVSCluster: Could not convert to statusMap")
-	}
-	log.Debugf("statusMap = %+v", statusMap)
-
-	conditionsArray, ok = statusMap["conditions"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("getPVSCluster: Could not convert to conditionsMap")
-	}
-	log.Debugf("conditionsArray = %+v", conditionsArray)
+	rootItemMap = getJsonMap(rootItemArray[0], bufferedChannel)
+	statusMap = getJsonMapValue(rootItemMap, "status", bufferedChannel)
+	conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
 
 	aconditions = make([]statusCondition, 0)
 	for _, item := range conditionsArray {
@@ -103,13 +108,11 @@ func getPVSCluster(jsonPVSCluster map[string]interface{}) ([]statusCondition, er
 			itemMap    map[string]interface{}
 			status     bool
 			stringType string
+			ok         bool
 			sc         statusCondition
 		)
 
-		itemMap, ok = item.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("getPVSCluster: Could not convert to itemMap: %v", item)
-		}
+		itemMap = getJsonMap(item, bufferedChannel)
 
 		switch itemMap["status"] {
 		case "True":
@@ -117,12 +120,14 @@ func getPVSCluster(jsonPVSCluster map[string]interface{}) ([]statusCondition, er
 		case "False":
 			status = false
 		default:
-			return nil, fmt.Errorf("getPVSCluster: Could not convert itemMap status: %v", itemMap["status"])
+			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap status: %v", itemMap["status"])
+			return aconditions
 		}
 
 		stringType, ok = itemMap["type"].(string)
 		if !ok {
-			return nil, fmt.Errorf("getPVSCluster: Could not convert itemMap type: %v", itemMap["type"])
+			bufferedChannel<-fmt.Errorf("getPVSCluster: Could not convert itemMap type: %v", itemMap["type"])
+			return aconditions
 		}
 
 		sc = statusCondition{
@@ -134,7 +139,7 @@ func getPVSCluster(jsonPVSCluster map[string]interface{}) ([]statusCondition, er
 		aconditions = append(aconditions, sc)
 	}
 
-	return aconditions, nil
+	return aconditions
 }
 
 func getClusterOperator(jsonCo map[string]interface{}, name string) (clusterConditions, error) {
