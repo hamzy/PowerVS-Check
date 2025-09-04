@@ -209,3 +209,48 @@ func runTwoCommands(ptrKubeconfig *string, cmdline1 string, cmdline2 string) err
 
 	return nil
 }
+
+func convertMap(mapFrom map[string]interface{}) (map[string]any, error) {
+	var (
+		mapTo    map[string]any
+		newValue any
+		err      error
+	)
+
+	mapTo = make(map[string]any)
+
+	for k, v := range mapFrom {
+		newValue, err = convertValue(v)
+		if err != nil {
+			return nil, err
+		}
+		mapTo[k] = newValue
+	}
+//	log.Debugf("convertMap: DONE!")
+
+	return mapTo, nil
+}
+
+func convertValue(v any) (any, error) {
+//	log.Debugf("convertValue: v type %T = %+v", v, v)
+	switch value := v.(type) {
+	case map[string]any:
+		convertedValue, err := convertMap(value)
+		return convertedValue, err
+	case []interface{}:
+		newArray := make([]any, 0)
+		for _, elm := range value {
+			convertedValue, err := convertValue(elm)
+			if err != nil {
+				return nil, err
+			}
+			newArray = append(newArray, convertedValue)
+		}
+		return newArray, nil
+	case string, bool, float64:
+		return value, nil
+	default:
+		log.Debugf("convertValue: unhandled type %T", v)
+		return nil, fmt.Errorf("")
+	}
+}

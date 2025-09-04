@@ -36,14 +36,14 @@ type statusCondition struct {
 	Type   string
 }
 
-func parseBob() (map[string]interface{}, error) {
+func parseJsonFile(filename string) (map[string]interface{}, error) {
 	var (
 		data     []byte
 		jsonData map[string]interface{}
 		err      error
 	)
 
-	data, err = os.ReadFile("/tmp/bob.json")
+	data, err = os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +52,10 @@ func parseBob() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+//	if false {
+//		jsonData, err = convertMap(jsonData)
+//	}
 
 	return jsonData, err
 }

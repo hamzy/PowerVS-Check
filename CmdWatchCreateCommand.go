@@ -30,6 +30,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	useTview = false
+)
+
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
 	var (
 		out            io.Writer
@@ -94,9 +98,17 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 		err                error
 	)
 
+	updateWindow := func(element string, text string) {
+		if useTview {
+			capiWindows[element].SetText(text)
+		} else {
+			fmt.Println(text)
+		}
+	}
+
 	for true {
-		if false {
-			jsonPVSCluster, err = parseBob()
+		if true {
+			jsonPVSCluster, err = parseJsonFile("/tmp/bob.json")
 		} else {
 			jsonPVSCluster, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSCluster)
 		}
@@ -104,7 +116,7 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 			err = fmt.Errorf("Error: could not run command: %v", err)
 			break
 		}
-		log.Debugf("jsonPVSCluster = %+v", jsonPVSCluster)
+		log.Debugf("updateCAPIPhase: jsonPVSCluster = %+v", jsonPVSCluster)
 
 		aconditions, err = getPVSCluster(jsonPVSCluster)
 		if err != nil {
@@ -114,34 +126,38 @@ func updateCAPIPhase(ptrKubeconfig *string, app *tview.Application, capiWindows 
 		ready = true
 		for _, condition := range aconditions {
 			_, ok = capiWindows[condition.Type]
-			log.Debugf("condition = %+v, ok = %v", condition, ok)
+			log.Debugf("updateCAPIPhase: condition = %+v, ok = %v", condition, ok)
 			if !ok {
 				continue
 			}
 			if condition.Status {
-				capiWindows[condition.Type].SetText(fmt.Sprintf("%s is READY", condition.Type))
+				updateWindow(condition.Type, fmt.Sprintf("%s is READY", condition.Type))
 			} else {
 				ready = false
-				capiWindows[condition.Type].SetText(fmt.Sprintf("%s is NOT READY", condition.Type))
+				updateWindow(condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
 			}
 		}
 
 		if ready {
-			log.Debugf("ready = %v, len(aconditions) = %d", ready, len(aconditions))
+			log.Debugf("updateCAPIPhase: ready = %v, len(aconditions) = %d", ready, len(aconditions))
 			if len(aconditions) == 8 {
 				err = nil
 				break
 			}
 		} else {
-			log.Debugf("ready = %v", ready)
+			log.Debugf("updateCAPIPhase: ready = %v", ready)
 		}
 
 		time.Sleep(10 * time.Second)
 	}
 
-	app.Stop()
+	if useTview {
+		app.Stop()
+	}
 
 	chanResult <- err
+
+	log.Debugf("updateCAPIPhase: DONE!")
 }
 
 func watchCAPIPhase(ptrKubeconfig *string) error {
@@ -162,32 +178,40 @@ func watchCAPIPhase(ptrKubeconfig *string) error {
 		return tv
 	}
 
-	app = tview.NewApplication()
-
-	grid = tview.NewGrid().SetBorders(true)
-
-	capiWindows = make(map[string]*tview.TextView)
-	for _, name := range windowList {
-		capiWindows[name] = newTextView(name)
+	if useTview {
+		app = tview.NewApplication()
+		grid = tview.NewGrid().SetBorders(true)
 	}
 
-	position := 1
-	for _, name := range windowList {
-		grid.AddItem(capiWindows[name], position, 0, 1, 1, 0, 0, false)
-		position += 1
+	capiWindows = make(map[string]*tview.TextView)
+
+	if useTview {
+		for _, name := range windowList {
+			capiWindows[name] = newTextView(name)
+		}
+
+		position := 1
+		for _, name := range windowList {
+			grid.AddItem(capiWindows[name], position, 0, 1, 1, 0, 0, false)
+			position += 1
+		}
 	}
 
 	chanResult = make(chan error)
 
-	go updateCAPIPhase(ptrKubeconfig, app, capiWindows, chanResult)
+	if useTview {
+		go updateCAPIPhase(ptrKubeconfig, app, capiWindows, chanResult)
 
-//	time.Sleep(15*time.Second)
+//		time.Sleep(15*time.Second)
 
-	if err = app.SetRoot(grid, true).SetFocus(grid).Run(); err != nil {
-		return err
+		if err = app.SetRoot(grid, true).SetFocus(grid).Run(); err != nil {
+			return err
+		}
+	} else {
+		go updateCAPIPhase(ptrKubeconfig, app, capiWindows, chanResult)
 	}
 
-	log.Debugf("chan = %+v", <-chanResult)
+	log.Debugf("watchCAPIPhase: chan = %+v", <-chanResult)
 
 	return nil
 }
@@ -213,9 +237,9 @@ if true {
 
 	cc, err = getClusterOperator(jsonCo, "authentication")
 	if err != nil {
-		log.Debugf("getClusterOperator returns %v", err)
+		log.Debugf("watchOpenshiftPhase: getClusterOperator returns %v", err)
 	} else {
-		log.Debugf("cc = %+v", cc)
+		log.Debugf("watchOpenshiftPhase: cc = %+v", cc)
 	}
 
 	return nil
