@@ -117,7 +117,7 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 			err = fmt.Errorf("Error: could not run command: %v", err)
 			break
 		}
-		log.Debugf("updateCAPIPhase1: jsonPVSCluster = %+v", jsonPVSCluster)
+//		log.Debugf("updateCAPIPhase1: jsonPVSCluster = %+v", jsonPVSCluster)
 
 		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
 
@@ -172,75 +172,6 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 
 func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
 	var (
-		cmdOcGetPVSMachines = []string{
-			"oc", "get", "ibmpowervsmachines", "-n", "openshift-cluster-api-guests", "-o", "json",
-		}
-		jsonPVSMachines    map[string]interface{}
-		aconditions        []statusCondition
-		conditionsReady    bool
-		err                error
-	)
-
-	for true {
-		if true {
-			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines2.json")
-		} else {
-			jsonPVSMachines, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSMachines)
-		}
-		if err != nil {
-			err = fmt.Errorf("Error: could not run command: %v", err)
-			break
-		}
-		log.Debugf("updateCAPIPhase2: jsonPVSMachines = %+v", jsonPVSMachines)
-
-		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
-
-		// @TODO is there a way to avoid the large hardcoded value?
-		bufferedChannel := make(chan error, 100)
-
-		aconditions = getPVSMachines(jsonPVSMachines, bufferedChannel)
-
-		err = gatherBufferedErrors(bufferedChannel)
-		if err != nil {
-			break
-		}
-
-		conditionsReady = true
-		for _, condition := range aconditions {
-			log.Debugf("updateCAPIPhase2: condition = %+v", condition)
-			if condition.Status {
-				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
-			} else {
-				conditionsReady = false
-				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
-			}
-		}
-
-		if conditionsReady {
-			log.Debugf("updateCAPIPhase2: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
-			if len(aconditions) == 8 {
-				err = nil
-				break
-			}
-		} else {
-			log.Debugf("updateCAPIPhase2: conditionsReady = %v", conditionsReady)
-			break // @REMOVE
-		}
-
-		time.Sleep(10 * time.Second)
-	}
-
-	if useTview {
-		app.Stop()
-	}
-
-	chanResult <- err
-
-	log.Debugf("updateCAPIPhase2: DONE!")
-}
-
-func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
-	var (
 		cmdOcGetPVSImage = []string{
 			"oc", "get", "ibmpowervsimage", "-n", "openshift-cluster-api-guests", "-o", "json",
 		}
@@ -260,7 +191,7 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 			err = fmt.Errorf("Error: could not run command: %v", err)
 			break
 		}
-		log.Debugf("updateCAPIPhase3: jsonPVSImage = %+v", jsonPVSImage)
+//		log.Debugf("updateCAPIPhase2: jsonPVSImage = %+v", jsonPVSImage)
 
 		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
 
@@ -268,6 +199,74 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 		bufferedChannel := make(chan error, 100)
 
 		aconditions = getPVSImage(jsonPVSImage, bufferedChannel)
+
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
+			break
+		}
+
+		conditionsReady = true
+		for _, condition := range aconditions {
+			log.Debugf("updateCAPIPhase2: condition = %+v", condition)
+			if condition.Status {
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
+			} else {
+				conditionsReady = false
+				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
+			}
+		}
+
+		if conditionsReady {
+			log.Debugf("updateCAPIPhase2: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
+			if len(aconditions) == 2 {
+				err = nil
+				break
+			}
+		} else {
+			log.Debugf("updateCAPIPhase2: conditionsReady = %v", conditionsReady)
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
+	if useTview {
+		app.Stop()
+	}
+
+	chanResult <- err
+
+	log.Debugf("updateCAPIPhase2: DONE!")
+}
+
+func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+	var (
+		cmdOcGetPVSMachines = []string{
+			"oc", "get", "ibmpowervsmachines", "-n", "openshift-cluster-api-guests", "-o", "json",
+		}
+		jsonPVSMachines    map[string]interface{}
+		aconditions        []statusCondition
+		conditionsReady    bool
+		err                error
+	)
+
+	for true {
+		if true {
+			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines2.json")
+		} else {
+			jsonPVSMachines, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSMachines)
+		}
+		if err != nil {
+			err = fmt.Errorf("Error: could not run command: %v", err)
+			break
+		}
+//		log.Debugf("updateCAPIPhase3: jsonPVSMachines = %+v", jsonPVSMachines)
+
+		// https://medium.com/@sumit-s/mastering-go-channels-from-beginner-to-pro-9c1eaba0da9e
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		aconditions = getPVSMachines(jsonPVSMachines, bufferedChannel)
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
@@ -287,12 +286,13 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 
 		if conditionsReady {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
-			if len(aconditions) == 2 {
+			if len(aconditions) == 8 {
 				err = nil
 				break
 			}
 		} else {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v", conditionsReady)
+			break // @REMOVE
 		}
 
 		time.Sleep(10 * time.Second)
