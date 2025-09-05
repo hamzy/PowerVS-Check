@@ -109,7 +109,24 @@ func getJsonMap(unknown any, bufferedChannel chan error) (jsonMap map[string]any
 	return
 }
 
-func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) (aconditions []statusCondition) {
+func gatherBufferedErrors(bufferedChannel chan error) (err error) {
+        stillHaveErrors := true
+        err = nil
+        for stillHaveErrors {
+                select {
+                case oneError := <-bufferedChannel:
+                        log.Debugf("gatherBufferedErrors found buffered error: %+v", oneError)
+                        if err == nil {
+                                err = oneError
+                        }
+                default:
+                        stillHaveErrors = false
+                }
+        }
+	return
+}
+
+func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) (aconditions []statusCondition, clusterReady bool) {
 	var (
 		rootItemArray   []any
 		rootItemMap     map[string]any
@@ -120,7 +137,7 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) (a
 	rootItemArray = getJsonArrayValue(jsonPVSCluster, "items", bufferedChannel)
 	if len(rootItemArray) != 1 {
 		bufferedChannel<-fmt.Errorf("getPVSCluster: len of JSON items != 1 (%d)", len(rootItemArray))
-		return aconditions
+		return
 	}
 
 	rootItemMap = getJsonMap(rootItemArray[0], bufferedChannel)
@@ -252,39 +269,35 @@ func getPVSImage(jsonPVSImage map[string]any, bufferedChannel chan error) (acond
 	return
 }
 
-func getClusterOperator(jsonCo map[string]interface{}, name string) (clusterConditions, error) {
+func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan error) (cc clusterConditions) {
 	var (
-		ok          bool
-		statusMap   map[string]interface{}
-		aconditions []interface{}
-		cc          clusterConditions
-		found       bool
-		err         error
+		rootItemArray []any
+		found         bool
 	)
 
-	items, ok := jsonCo["items"].([]interface {})
-	if !ok {
-		return cc, fmt.Errorf("getClusterOperator: Could not find JSON items")
+	rootItemArray = getJsonArrayValue(jsonCo, "items", bufferedChannel)
+	if len(rootItemArray) != 1 {
+		bufferedChannel<-fmt.Errorf("getPVSImage: len of JSON items != 1 (%d)", len(rootItemArray))
+		return
 	}
-	log.Debugf("len(items) = %d", len(items))
+	log.Debugf("len(rootItemArray) = %d", len(rootItemArray))
 
 	found = false
-	for _, item := range items {
-		itemMap, ok := item.(map[string]interface {})
-		if !ok {
-			return cc, fmt.Errorf("Could not convert item to itemMap")
-		}
 
-		metadataMap, ok := itemMap["metadata"].(map[string]interface {})
-		if !ok {
-			return cc, fmt.Errorf("Could not convert itemMap to metadataMap")
-		}
+	for _, clusterItem := range rootItemArray {
+		var (
+			clusterItemMap  map[string]any
+			metadataMap     map[string]any
+			metadataName    string
+			statusMap       map[string]any
+			conditionsArray []any
+		)
 
-		metadataName, ok := metadataMap["name"].(string)
-		if !ok {
-			return cc, fmt.Errorf("Could not convert metadataMap to metadataName")
-		}
-//		log.Debugf("name = %s", metadataName)
+		clusterItemMap = getJsonMap(clusterItem, bufferedChannel)
+
+		metadataMap = getJsonMapValue(clusterItemMap, "metadata", bufferedChannel)
+
+		metadataName = getJsonMapString(metadataMap, "name", bufferedChannel)
 
 		if name != metadataName {
 			continue
@@ -292,36 +305,26 @@ func getClusterOperator(jsonCo map[string]interface{}, name string) (clusterCond
 
 		found = true
 
-		statusMap, ok = itemMap["status"].(map[string]interface{})
-		if !ok {
-			return cc, fmt.Errorf("Could not find status in cluster operator named %s", name)
-		}
+		statusMap = getJsonMapValue(clusterItemMap, "status", bufferedChannel)
 
 //		value, exists := statusMap["conditions"]
 //		log.Debugf("value = %v", value)
 //		log.Debugf("type = %T", value)
 //		log.Debugf("exists = %v", exists)
 
-		aconditions, ok = statusMap["conditions"].([]interface{})
-		if !ok {
-			return cc, fmt.Errorf("Could not find conditions in cluster operator named %s", name)
-		}
+		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
 
-		for _, condition := range aconditions {
-			conditionMap, ok := condition.(map[string]interface{})
-			if !ok {
-				return cc, fmt.Errorf("Could create conditionMap for cluster operator named %s", name)
-			}
+		for _, conditionItem := range conditionsArray {
+			var (
+				conditionMap map[string]any
+				typeResult   string
+				statusResult string
+			)
 
-			typeResult, ok := conditionMap["type"].(string)
-			if !ok {
-				return cc, fmt.Errorf("Could not find condition type in cluster operator named %s", name)
-			}
+			conditionMap = getJsonMap(conditionItem, bufferedChannel)
 
-			statusResult, ok := conditionMap["status"].(string)
-			if !ok {
-				return cc, fmt.Errorf("Could not find condition status in cluster operator named %s", name)
-			}
+			typeResult = getJsonMapString(conditionMap, "type", bufferedChannel)
+			statusResult = getJsonMapString(conditionMap, "status", bufferedChannel)
 
 			switch typeResult {
 			case "Available":
@@ -337,8 +340,9 @@ func getClusterOperator(jsonCo map[string]interface{}, name string) (clusterCond
 	}
 
 	if !found {
-		return cc, fmt.Errorf("Could not find cluster operator named %s", name)
+		bufferedChannel<-fmt.Errorf("Could not find cluster operator named %s", name)
+		return
 	}
 
-	return cc, err
+	return
 }

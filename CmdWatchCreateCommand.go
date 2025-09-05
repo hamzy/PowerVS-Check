@@ -101,8 +101,9 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 		}
 		jsonPVSCluster     map[string]interface{}
 		aconditions        []statusCondition
+		clusterReady       bool
 		ok                 bool
-		ready              bool
+		conditionsReady    bool
 		err                error
 	)
 
@@ -123,26 +124,14 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 		// @TODO is there a way to avoid the large hardcoded value?
 		bufferedChannel := make(chan error, 100)
 
-		aconditions = getPVSCluster(jsonPVSCluster, bufferedChannel)
+		aconditions, clusterReady = getPVSCluster(jsonPVSCluster, bufferedChannel)
 
-		stillHaveErrors := true
-		var firstError error
-		for stillHaveErrors {
-			select {
-			case err = <-bufferedChannel:
-				log.Debugf("getPVSCluster returned error: %+v", err)
-				if firstError == nil {
-					firstError = err
-				}
-			default:
-				stillHaveErrors = false
-			}
-		}
-		if firstError != nil {
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
 			break
 		}
 
-		ready = true
+		conditionsReady = true
 		for _, condition := range aconditions {
 			_, ok = capiWindows[condition.Type]
 			log.Debugf("updateCAPIPhase1: condition = %+v, ok = %v", condition, ok)
@@ -152,19 +141,21 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 			if condition.Status {
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
 			} else {
-				ready = false
+				conditionsReady = false
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
 			}
 		}
 
-		if ready {
-			log.Debugf("updateCAPIPhase1: ready = %v, len(aconditions) = %d", ready, len(aconditions))
-			if len(aconditions) == 8 {
+		if conditionsReady {
+			log.Debugf("updateCAPIPhase1: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
+			log.Debugf("updateCAPIPhase1: clusterReady = %v", clusterReady)
+
+			if len(aconditions) == 8 && clusterReady {
 				err = nil
 				break
 			}
 		} else {
-			log.Debugf("updateCAPIPhase1: ready = %v", ready)
+			log.Debugf("updateCAPIPhase1: conditionsReady = %v", conditionsReady)
 		}
 
 		time.Sleep(10 * time.Second)
@@ -186,7 +177,7 @@ func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows
 		}
 		jsonPVSMachines    map[string]interface{}
 		aconditions        []statusCondition
-		ready              bool
+		conditionsReady    bool
 		err                error
 	)
 
@@ -209,42 +200,30 @@ func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows
 
 		aconditions = getPVSMachines(jsonPVSMachines, bufferedChannel)
 
-		stillHaveErrors := true
-		var firstError error
-		for stillHaveErrors {
-			select {
-			case err = <-bufferedChannel:
-				log.Debugf("getPVSMachines returned error: %+v", err)
-				if firstError == nil {
-					firstError = err
-				}
-			default:
-				stillHaveErrors = false
-			}
-		}
-		if firstError != nil {
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
 			break
 		}
 
-		ready = true
+		conditionsReady = true
 		for _, condition := range aconditions {
 			log.Debugf("updateCAPIPhase2: condition = %+v", condition)
 			if condition.Status {
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
 			} else {
-				ready = false
+				conditionsReady = false
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
 			}
 		}
 
-		if ready {
-			log.Debugf("updateCAPIPhase2: ready = %v, len(aconditions) = %d", ready, len(aconditions))
+		if conditionsReady {
+			log.Debugf("updateCAPIPhase2: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
 			if len(aconditions) == 8 {
 				err = nil
 				break
 			}
 		} else {
-			log.Debugf("updateCAPIPhase2: ready = %v", ready)
+			log.Debugf("updateCAPIPhase2: conditionsReady = %v", conditionsReady)
 			break // @REMOVE
 		}
 
@@ -267,7 +246,7 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 		}
 		jsonPVSImage       map[string]interface{}
 		aconditions        []statusCondition
-		ready              bool
+		conditionsReady    bool
 		err                error
 	)
 
@@ -290,42 +269,30 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 
 		aconditions = getPVSImage(jsonPVSImage, bufferedChannel)
 
-		stillHaveErrors := true
-		var firstError error
-		for stillHaveErrors {
-			select {
-			case err = <-bufferedChannel:
-				log.Debugf("getPVSImage returned error: %+v", err)
-				if firstError == nil {
-					firstError = err
-				}
-			default:
-				stillHaveErrors = false
-			}
-		}
-		if firstError != nil {
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
 			break
 		}
 
-		ready = true
+		conditionsReady = true
 		for _, condition := range aconditions {
 			log.Debugf("updateCAPIPhase3: condition = %+v", condition)
 			if condition.Status {
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
 			} else {
-				ready = false
+				conditionsReady = false
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
 			}
 		}
 
-		if ready {
-			log.Debugf("updateCAPIPhase3: ready = %v, len(aconditions) = %d", ready, len(aconditions))
+		if conditionsReady {
+			log.Debugf("updateCAPIPhase3: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
 			if len(aconditions) == 2 {
 				err = nil
 				break
 			}
 		} else {
-			log.Debugf("updateCAPIPhase3: ready = %v", ready)
+			log.Debugf("updateCAPIPhase3: conditionsReady = %v", conditionsReady)
 		}
 
 		time.Sleep(10 * time.Second)
@@ -420,12 +387,17 @@ if true {
 		return fmt.Errorf("Error: could not run command: %v", err)
 	}
 
-	cc, err = getClusterOperator(jsonCo, "authentication")
+	// @TODO is there a way to avoid the large hardcoded value?
+	bufferedChannel := make(chan error, 100)
+
+	cc = getClusterOperator(jsonCo, "authentication", bufferedChannel)
+
+	err = gatherBufferedErrors(bufferedChannel)
 	if err != nil {
 		log.Debugf("watchOpenshiftPhase: getClusterOperator returns %v", err)
 	} else {
 		log.Debugf("watchOpenshiftPhase: cc = %+v", cc)
 	}
 
-	return nil
+	return err
 }
