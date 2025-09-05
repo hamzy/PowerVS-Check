@@ -67,6 +67,29 @@ type ServiceInstance struct {
 
 func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 	var (
+		asis []*ServiceInstance
+		aros []RunnableObject
+		errs []error
+	)
+
+	asis, errs = innerNewServiceInstance(services)
+
+	aros = make([]RunnableObject, len(asis))
+	// Go does not support type converting the entire array.
+	// So we do it manually.
+	for i, v := range asis {
+		aros[i] = RunnableObject(v)
+	}
+
+	return aros, errs
+}
+
+func NewServiceInstanceAlt(services *Services) ([]*ServiceInstance, []error) {
+	return innerNewServiceInstance(services)
+}
+
+func innerNewServiceInstance(services *Services) ([]*ServiceInstance, []error) {
+	var (
 		siName          string
 		infraID         string
 		dhcpName        string
@@ -80,7 +103,7 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 		cancel          context.CancelFunc
 		foundInstances  []string
 		si              *ServiceInstance
-		sis             []RunnableObject
+		asis            []*ServiceInstance
 		errs            []error
 		idxSi           int
 		err             error
@@ -106,7 +129,7 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 
 	siName, err = services.GetMetadata().GetObjectName(RunnableObject(&ServiceInstance{}))
 	if err != nil {
-		return []RunnableObject{si}, []error{err}
+		return []*ServiceInstance{si}, []error{err}
 	}
 
 	resourceGroupID = services.GetResourceGroupID()
@@ -131,11 +154,11 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 	}
 	log.Debugf("NewServiceInstance: foundInstances = %+v, err = %v", foundInstances, err)
 
-	sis = make([]RunnableObject, 1)
+	asis = make([]*ServiceInstance, 1)
 	errs = make([]error, 1)
 
 	idxSi = 0
-	sis[idxSi] = si
+	asis[idxSi] = si
 
 	if len(foundInstances) == 0 {
 		if guid != "" {
@@ -206,21 +229,21 @@ func NewServiceInstance(services *Services) ([]RunnableObject, []error) {
 		}
 
 		if idxSi > 0 {
-			log.Debugf("NewServiceInstance: appending to sis")
+			log.Debugf("NewServiceInstance: appending to asis")
 
-			sis = append(sis, si)
+			asis = append(asis, si)
 			errs = append(errs, err)
 		} else {
-			log.Debugf("NewServiceInstance: altering first sis")
+			log.Debugf("NewServiceInstance: altering first asis")
 
-			sis[idxSi] = si
+			asis[idxSi] = si
 			errs[idxSi] = err
 		}
 
 		idxSi++
 	}
 
-	return sis, errs
+	return asis, errs
 }
 
 // findServiceInstance returns the service instance matching by name in the IBM Cloud.
