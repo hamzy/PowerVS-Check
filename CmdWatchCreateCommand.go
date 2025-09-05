@@ -405,6 +405,7 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 		services       *Services
 		errs           []error
 		aloadBalancers []*LoadBalancer
+		intLb          *LoadBalancer
 		err            error
 	)
 
@@ -431,6 +432,21 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	for _, lb := range aloadBalancers {
+		name, err := lb.Name()
+		if err == nil {
+			switch GetLoadBalancerType(name) {
+			case LoadBalancerTypeInternal:
+				intLb = lb
+			case LoadBalancerTypeExternal:
+			}
+		}
+	}
+
+	if intLb != nil {
+		intLb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443")
 	}
 
 	return nil

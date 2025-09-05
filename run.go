@@ -125,6 +125,7 @@ func runSplitCommandJson(kubeconfig string, acmdline []string) (map[string]inter
 
 	err = json.Unmarshal(out, &jsonData)
 	if err != nil {
+		return nil, err
 	}
 //	log.Debugf("jsonData = %+v", jsonData)
 

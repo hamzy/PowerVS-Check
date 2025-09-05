@@ -138,7 +138,7 @@ func innerNewLoadBalancer(services *Services) ([]*LoadBalancer, []error) {
 			continue
 		}
 
-		switch loadBalancerType(*innerLb.Name) {
+		switch GetLoadBalancerType(*innerLb.Name) {
 		case LoadBalancerTypeUnknown:
 			log.Fatalf("NewLoadBalancer could not GetLoadBalancerWithContext(%s): %s", lbId, response)
 		case LoadBalancerTypeInternal:
@@ -168,7 +168,7 @@ const (
 	LoadBalancerTypeKube
 )
 
-func loadBalancerType(name string) LoadBalancerType {
+func GetLoadBalancerType(name string) LoadBalancerType {
 	if regexp.MustCompile("loadbalancer-int$").MatchString(name) {
 		return LoadBalancerTypeInternal
 	} else if regexp.MustCompile("loadbalancer$").MatchString(name) {
@@ -477,49 +477,33 @@ func (lb *LoadBalancer) ClusterStatus() {
 		return
 	}
 
-	switch loadBalancerType(*lb.innerLb.Name) {
+	switch GetLoadBalancerType(*lb.innerLb.Name) {
 	case LoadBalancerTypeUnknown:
 	case LoadBalancerTypeInternal:
 		// Internal Load Balancer
-		if !lb.CheckLoadBalancerPool([]string{
-			"pool-6443",
-		},
-			"port 6443") {
+		if !lb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 
-		if !lb.CheckLoadBalancerPool([]string{
-			"machine-config-server",
-			"additional-pool-22623",
-		},
-			"machine config server") {
+		if !lb.CheckLoadBalancerPool([]string{"machine-config-server", "additional-pool-22623"}, "machine config server") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 	case LoadBalancerTypeExternal:
 		// External Load Balancer
-		if !lb.CheckLoadBalancerPool([]string{
-			"pool-6443",
-		},
-			"port 6443") {
+		if !lb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 	case LoadBalancerTypeKube:
 		// The Kube pool
-		if !lb.CheckLoadBalancerPool([]string{
-			"tcp-80",
-		},
-			"port 80") {
+		if !lb.CheckLoadBalancerPool([]string{"tcp-80"}, "port 80") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
 
-		if !lb.CheckLoadBalancerPool([]string{
-			"tcp-443",
-		},
-			"port 443") {
+		if !lb.CheckLoadBalancerPool([]string{"tcp-443"}, "port 443") {
 			fmt.Printf("%s %s is NOTOK.\n", lbObjectName, lb.name)
 			return
 		}
