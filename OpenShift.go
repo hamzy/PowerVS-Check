@@ -25,6 +25,7 @@ import (
 )
 
 type clusterConditions struct {
+	Name        string
 	Available   string
 	Degraded    string
 	Progressing string
@@ -284,10 +285,6 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 	)
 
 	rootItemArray = getJsonArrayValue(jsonCo, "items", bufferedChannel)
-	if len(rootItemArray) != 1 {
-		bufferedChannel<-fmt.Errorf("getPVSImage: len of JSON items != 1 (%d)", len(rootItemArray))
-		return
-	}
 	log.Debugf("getClusterOperator: len(rootItemArray) = %d", len(rootItemArray))
 
 	found = false
@@ -310,6 +307,8 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 		if name != metadataName {
 			continue
 		}
+
+		cc.Name = metadataName
 
 		found = true
 

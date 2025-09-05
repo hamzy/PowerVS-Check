@@ -38,12 +38,34 @@ const (
 
 func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 	var (
+		lbs      []*LoadBalancer
+		errs     []error
+		ros      []RunnableObject
+	)
+
+	lbs, errs = NewLoadBalancerAlt(services)
+
+	ros = make([]RunnableObject, 3)
+	// Go does not support type converting the entire array.
+	// So we do it manually.
+	for i, v := range lbs {
+		ros[i] = RunnableObject(v)
+	}
+
+	return ros, errs
+}
+
+func NewLoadBalancerAlt(services *Services) ([]*LoadBalancer, []error) {
+	return innerNewLoadBalancer(services)
+}
+
+func innerNewLoadBalancer(services *Services) ([]*LoadBalancer, []error) {
+	var (
 		lbName   string
 		vpcSvc   *vpcv1.VpcV1
 		ctx      context.Context
 		cancel   context.CancelFunc
 		lbIds    []string
-		ros      []RunnableObject
 		lbs      []*LoadBalancer
 		response *core.DetailedResponse
 		err      error
@@ -52,7 +74,7 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 
 	lbName, err = services.GetMetadata().GetObjectName(RunnableObject(&LoadBalancer{}))
 	if err != nil {
-		return []RunnableObject{&LoadBalancer{
+		return []*LoadBalancer{&LoadBalancer{
 			name:     lbName,
 			services: services,
 			innerLb:  nil,
@@ -70,7 +92,7 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 		lbIds, err = listLoadBalancersByName(vpcSvc, ctx, lbName)
 	}
 	if err != nil {
-		return []RunnableObject{&LoadBalancer{
+		return []*LoadBalancer{&LoadBalancer{
 			name:     lbName,
 			services: services,
 			innerLb:  nil,
@@ -95,7 +117,6 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 			innerLb:  nil,
 		},
 	}
-	ros = make([]RunnableObject, 3)
 	errs = make([]error, 3)
 
 	for _, lbId := range lbIds {
@@ -135,13 +156,7 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 		}
 	}
 
-	// Go does not support type converting the entire array.
-	// So we do it manually.
-	for i, v := range lbs {
-		ros[i] = RunnableObject(v)
-	}
-
-	return ros, errs
+	return lbs, errs
 }
 
 type LoadBalancerType int
@@ -322,7 +337,7 @@ func (lb *LoadBalancer) listLoadBalancerPoolMembers(id string) ([]*vpcv1.LoadBal
 	return result, nil
 }
 
-func (lb *LoadBalancer) checkLoadBalancerPool(poolNames []string, poolUserName string) bool {
+func (lb *LoadBalancer) CheckLoadBalancerPool(poolNames []string, poolUserName string) bool {
 	var (
 		ctx           context.Context
 		cancel        context.CancelFunc
@@ -343,7 +358,7 @@ func (lb *LoadBalancer) checkLoadBalancerPool(poolNames []string, poolUserName s
 
 	select {
 	case <-ctx.Done():
-		log.Debugf("checkLoadBalancerPool: case <-ctx.Done()")
+		log.Debugf("CheckLoadBalancerPool: case <-ctx.Done()")
 		return false
 	default:
 	}
@@ -354,12 +369,12 @@ func (lb *LoadBalancer) checkLoadBalancerPool(poolNames []string, poolUserName s
 	if err != nil {
 		return false
 	}
-	log.Debugf("checkLoadBalancerPool: lbps = %+v", lbps)
+	log.Debugf("CheckLoadBalancerPool: lbps = %+v", lbps)
 
 	for _, lbpElm := range lbps {
 		select {
 		case <-ctx.Done():
-			log.Debugf("checkLoadBalancerPool: case <-ctx.Done()")
+			log.Debugf("CheckLoadBalancerPool: case <-ctx.Done()")
 			return false
 		default:
 		}
@@ -375,14 +390,14 @@ func (lb *LoadBalancer) checkLoadBalancerPool(poolNames []string, poolUserName s
 		}
 
 		lbpGetOptions = vpcSvc.NewGetLoadBalancerPoolOptions(*lb.innerLb.ID, *lbpElm.ID)
-		log.Debugf("checkLoadBalancerPool: lbpGetOptions = %s %s", *lbpGetOptions.LoadBalancerID, *lbpGetOptions.ID)
+		log.Debugf("CheckLoadBalancerPool: lbpGetOptions = %s %s", *lbpGetOptions.LoadBalancerID, *lbpGetOptions.ID)
 
 		lbp, _, err = vpcSvc.GetLoadBalancerPoolWithContext(ctx, lbpGetOptions)
 		if err != nil {
 			fmt.Printf("%s %s could not get load balancer pool: %v\n", lbObjectName, lb.name, err)
 			return false
 		}
-		log.Debugf("checkLoadBalancerPool: lbp = %+v", lbp)
+		log.Debugf("CheckLoadBalancerPool: lbp = %+v", lbp)
 		break
 	}
 
@@ -400,12 +415,12 @@ func (lb *LoadBalancer) checkLoadBalancerPool(poolNames []string, poolUserName s
 	for _, lbpm := range lbpms {
 		select {
 		case <-ctx.Done():
-			log.Debugf("checkLoadBalancerPool: case <-ctx.Done()")
+			log.Debugf("CheckLoadBalancerPool: case <-ctx.Done()")
 			return false
 		default:
 		}
 
-		log.Debugf("checkLoadBalancerPool: lbpm = %+v", lbpm)
+		log.Debugf("CheckLoadBalancerPool: lbpm = %+v", lbpm)
 
 		if *lbpm.Health == "ok" {
 			okHealthCount += 1
@@ -466,7 +481,7 @@ func (lb *LoadBalancer) ClusterStatus() {
 	case LoadBalancerTypeUnknown:
 	case LoadBalancerTypeInternal:
 		// Internal Load Balancer
-		if !lb.checkLoadBalancerPool([]string{
+		if !lb.CheckLoadBalancerPool([]string{
 			"pool-6443",
 		},
 			"port 6443") {
@@ -474,7 +489,7 @@ func (lb *LoadBalancer) ClusterStatus() {
 			return
 		}
 
-		if !lb.checkLoadBalancerPool([]string{
+		if !lb.CheckLoadBalancerPool([]string{
 			"machine-config-server",
 			"additional-pool-22623",
 		},
@@ -484,7 +499,7 @@ func (lb *LoadBalancer) ClusterStatus() {
 		}
 	case LoadBalancerTypeExternal:
 		// External Load Balancer
-		if !lb.checkLoadBalancerPool([]string{
+		if !lb.CheckLoadBalancerPool([]string{
 			"pool-6443",
 		},
 			"port 6443") {
@@ -493,7 +508,7 @@ func (lb *LoadBalancer) ClusterStatus() {
 		}
 	case LoadBalancerTypeKube:
 		// The Kube pool
-		if !lb.checkLoadBalancerPool([]string{
+		if !lb.CheckLoadBalancerPool([]string{
 			"tcp-80",
 		},
 			"port 80") {
@@ -501,7 +516,7 @@ func (lb *LoadBalancer) ClusterStatus() {
 			return
 		}
 
-		if !lb.checkLoadBalancerPool([]string{
+		if !lb.CheckLoadBalancerPool([]string{
 			"tcp-443",
 		},
 			"port 443") {

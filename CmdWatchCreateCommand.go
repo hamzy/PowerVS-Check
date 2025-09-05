@@ -34,17 +34,19 @@ import (
 
 const (
 	useTview = false
-	useSavedJson = true
+	useSavedJson = false
 )
 
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
 	var (
 		out            io.Writer
+		ptrApiKey      *string
 		ptrShouldDebug *string
 		ptrKubeconfig  *string
 		err            error
 	)
 
+	ptrApiKey = watchCreateClusterFlags.String("apiKey", "", "Your IBM Cloud API key")
 	ptrShouldDebug = watchCreateClusterFlags.String("shouldDebug", "false", "Should output debug output")
 	ptrKubeconfig = watchCreateClusterFlags.String("kubeconfig", "", "The KUBECONFIG file")
 
@@ -70,6 +72,16 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		Level:     logrus.DebugLevel,
 	}
 
+	if *ptrApiKey == "" {
+		return fmt.Errorf("Error: No API key set, use -apiKey")
+	}
+
+	// Before we do a lot of work, validate the apikey!
+	_, err = InitBXService(*ptrApiKey)
+	if err != nil {
+		return err
+	}
+
 	if *ptrKubeconfig == "" {
 		return fmt.Errorf("Error: No KUBECONFIG key set, use -kubeconfig")
 	}
@@ -82,7 +94,7 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		return err
 	}
 
-	err = watchCAPIPhase(kubeconfigCapi)
+	err = watchCAPIPhases(kubeconfigCapi)
 	if err != nil {
 		return err
 	}
@@ -93,7 +105,12 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		return err
 	}
 
-	err = watchOpenshiftPhase(kubeconfigOpenshift)
+	err = watchOpenshiftPhase1(*ptrKubeconfig, *ptrApiKey)
+	if err != nil {
+		return err
+	}
+
+	err = watchOpenshiftPhase2(kubeconfigOpenshift)
 	if err != nil {
 		return err
 	}
@@ -198,7 +215,7 @@ func updateCAPIPhase2(kubeconfig string, app *tview.Application, capiWindows map
 
 	for true {
 		if useSavedJson {
-			jsonPVSImage, err = parseJsonFile("ibmpowervsimage.json")
+			jsonPVSImage, err = parseJsonFile("ibmpowervsimage1.json")
 		} else {
 			jsonPVSImage, err = runSplitCommandJson(kubeconfig, cmdOcGetPVSImage)
 		}
@@ -301,13 +318,12 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 
 		if conditionsReady {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
-			if len(aconditions) == 8 {
+			if len(aconditions) == 4 {
 				err = nil
 				break
 			}
 		} else {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v", conditionsReady)
-			break // @REMOVE
 		}
 
 		time.Sleep(10 * time.Second)
@@ -322,7 +338,7 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 	log.Debugf("updateCAPIPhase3: DONE!")
 }
 
-func watchCAPIPhase(kubeconfig string) error {
+func watchCAPIPhases(kubeconfig string) error {
 	var (
 		app         *tview.Application
 		grid        *tview.Grid
@@ -383,7 +399,44 @@ func watchCAPIPhase(kubeconfig string) error {
 	return nil
 }
 
-func watchOpenshiftPhase(kubeconfig string) error {
+func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
+	var (
+		metadata       *Metadata
+		services       *Services
+		errs           []error
+		aloadBalancers []*LoadBalancer
+		err            error
+	)
+
+	metadataLocation := filepath.Join(kubeconfig, "metadata.json")
+
+	metadata, err = NewMetadataFromCCMetadata(metadataLocation)
+	if err != nil {
+		return err
+	}
+
+	services, err = NewServices(metadata, apiKey)
+	if err != nil {
+		return fmt.Errorf("Error: Could not create a Services object (%s)!\n", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Querying the Load Balancer...\n")
+
+	aloadBalancers, errs = NewLoadBalancerAlt(services)
+	log.Debugf("aloadBalancers = %+v", aloadBalancers)
+	log.Debugf("errs = %+v", errs)
+
+	// Loop through the returned errors.
+	for _, err = range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func watchOpenshiftPhase2(kubeconfig string) error {
 	var (
 		cmdOcGetCo = []string{
 			"oc", "--request-timeout=5s", "get", "co", "-o", "json",
@@ -393,11 +446,11 @@ func watchOpenshiftPhase(kubeconfig string) error {
 		err        error
 	)
 
-if true {
-	return nil
-}
-
-	jsonCo, err = runSplitCommandJson(kubeconfig, cmdOcGetCo)
+	if useSavedJson {
+		jsonCo, err = parseJsonFile("ocgetco1.json")
+	} else {
+		jsonCo, err = runSplitCommandJson(kubeconfig, cmdOcGetCo)
+	}
 	if err != nil {
 		return fmt.Errorf("Error: could not run command: %v", err)
 	}
