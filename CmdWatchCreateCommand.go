@@ -445,8 +445,13 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 		}
 	}
 
-	if intLb != nil {
-		intLb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443")
+	for true {
+		if intLb != nil {
+			if intLb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443") {
+				break
+			}
+		}
+		time.Sleep(10 * time.Second)
 	}
 
 	return nil
