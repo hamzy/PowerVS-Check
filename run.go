@@ -27,7 +27,7 @@ import (
 	"strings"
 )
 
-func runCommand(ptrKubeconfig *string, cmdline string) error {
+func runCommand(kubeconfig string, cmdline string) error {
 	var (
 		acmdline []string
 		ctx      context.Context
@@ -53,7 +53,7 @@ func runCommand(ptrKubeconfig *string, cmdline string) error {
 
 	cmd.Env = append(
 		os.Environ(),
-		fmt.Sprintf("KUBECONFIG=%s", *ptrKubeconfig),
+		fmt.Sprintf("KUBECONFIG=%s", kubeconfig),
 	)
 
 	fmt.Println("8<--------8<--------8<--------8<--------8<--------8<--------8<--------8<--------")
@@ -92,7 +92,7 @@ func runSplitCommand(acmdline []string) error {
 	return err
 }
 
-func runSplitCommandJson(ptrKubeconfig *string, acmdline []string) (map[string]interface{}, error) {
+func runSplitCommandJson(kubeconfig string, acmdline []string) (map[string]interface{}, error) {
 	var (
 		ctx      context.Context
 		cancel   context.CancelFunc
@@ -115,7 +115,7 @@ func runSplitCommandJson(ptrKubeconfig *string, acmdline []string) (map[string]i
 
 	cmd.Env = append(
 		os.Environ(),
-		fmt.Sprintf("KUBECONFIG=%s", *ptrKubeconfig),
+		fmt.Sprintf("KUBECONFIG=%s", kubeconfig),
 	)
 
 //	log.Debugf("Running: %+v", acmdline)
@@ -131,7 +131,7 @@ func runSplitCommandJson(ptrKubeconfig *string, acmdline []string) (map[string]i
 	return jsonData, err
 }
 
-func runTwoCommands(ptrKubeconfig *string, cmdline1 string, cmdline2 string) error {
+func runTwoCommands(kubeconfig string, cmdline1 string, cmdline2 string) error {
 	var (
 		acmdline1 []string
 		acmdline2 []string
@@ -166,7 +166,7 @@ func runTwoCommands(ptrKubeconfig *string, cmdline1 string, cmdline2 string) err
 
 	cmd1.Env = append(
 		os.Environ(),
-		fmt.Sprintf("KUBECONFIG=%s", *ptrKubeconfig),
+		fmt.Sprintf("KUBECONFIG=%s", kubeconfig),
 	)
 
 	if len(acmdline2) == 0 {

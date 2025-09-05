@@ -18,10 +18,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 
 const (
 	useTview = false
+	useSavedJson = true
 )
 
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
@@ -73,12 +76,24 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 
 	fmt.Fprintf(os.Stderr, "Program version is %v, release = %v\n", version, release)
 
-	err = watchCAPIPhase(ptrKubeconfig)
+	kubeconfigCapi := filepath.Join(*ptrKubeconfig, ".clusterapi_output/envtest.kubeconfig")
+
+	if _, err = os.Stat(kubeconfigCapi); errors.Is(err, os.ErrNotExist) && !useSavedJson {
+		return err
+	}
+
+	err = watchCAPIPhase(kubeconfigCapi)
 	if err != nil {
 		return err
 	}
 
-	err = watchOpenshiftPhase(ptrKubeconfig)
+	kubeconfigOpenshift := filepath.Join(*ptrKubeconfig, "auth/kubeconfig")
+
+	if _, err = os.Stat(kubeconfigOpenshift); errors.Is(err, os.ErrNotExist) && !useSavedJson {
+		return err
+	}
+
+	err = watchOpenshiftPhase(kubeconfigOpenshift)
 	if err != nil {
 		return err
 	}
@@ -94,7 +109,7 @@ func updateWindow(capiWindows map[string]*tview.TextView, element string, text s
 	}
 }
 
-func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+func updateCAPIPhase1(kubeconfig string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
 	var (
 		cmdOcGetPVSCluster = []string{
 			"oc", "get", "ibmpowervscluster", "-n", "openshift-cluster-api-guests", "-o", "json",
@@ -108,10 +123,10 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 	)
 
 	for true {
-		if true {
+		if useSavedJson {
 			jsonPVSCluster, err = parseJsonFile("ibmpowervscluster2.json")
 		} else {
-			jsonPVSCluster, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSCluster)
+			jsonPVSCluster, err = runSplitCommandJson(kubeconfig, cmdOcGetPVSCluster)
 		}
 		if err != nil {
 			err = fmt.Errorf("Error: could not run command: %v", err)
@@ -170,7 +185,7 @@ func updateCAPIPhase1(ptrKubeconfig *string, app *tview.Application, capiWindows
 	log.Debugf("updateCAPIPhase1: DONE!")
 }
 
-func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+func updateCAPIPhase2(kubeconfig string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
 	var (
 		cmdOcGetPVSImage = []string{
 			"oc", "get", "ibmpowervsimage", "-n", "openshift-cluster-api-guests", "-o", "json",
@@ -182,10 +197,10 @@ func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows
 	)
 
 	for true {
-		if true {
+		if useSavedJson {
 			jsonPVSImage, err = parseJsonFile("ibmpowervsimage.json")
 		} else {
-			jsonPVSImage, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSImage)
+			jsonPVSImage, err = runSplitCommandJson(kubeconfig, cmdOcGetPVSImage)
 		}
 		if err != nil {
 			err = fmt.Errorf("Error: could not run command: %v", err)
@@ -238,7 +253,7 @@ func updateCAPIPhase2(ptrKubeconfig *string, app *tview.Application, capiWindows
 	log.Debugf("updateCAPIPhase2: DONE!")
 }
 
-func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
+func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map[string]*tview.TextView, chanResult chan<- error) {
 	var (
 		cmdOcGetPVSMachines = []string{
 			"oc", "get", "ibmpowervsmachines", "-n", "openshift-cluster-api-guests", "-o", "json",
@@ -250,10 +265,10 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 	)
 
 	for true {
-		if true {
+		if useSavedJson {
 			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines2.json")
 		} else {
-			jsonPVSMachines, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetPVSMachines)
+			jsonPVSMachines, err = runSplitCommandJson(kubeconfig, cmdOcGetPVSMachines)
 		}
 		if err != nil {
 			err = fmt.Errorf("Error: could not run command: %v", err)
@@ -307,7 +322,7 @@ func updateCAPIPhase3(ptrKubeconfig *string, app *tview.Application, capiWindows
 	log.Debugf("updateCAPIPhase3: DONE!")
 }
 
-func watchCAPIPhase(ptrKubeconfig *string) error {
+func watchCAPIPhase(kubeconfig string) error {
 	var (
 		app         *tview.Application
 		grid        *tview.Grid
@@ -347,7 +362,7 @@ func watchCAPIPhase(ptrKubeconfig *string) error {
 	chanResult = make(chan error)
 
 	if useTview {
-		go updateCAPIPhase1(ptrKubeconfig, app, capiWindows, chanResult)
+		go updateCAPIPhase1(kubeconfig, app, capiWindows, chanResult)
 
 //		time.Sleep(15*time.Second)
 
@@ -355,20 +370,20 @@ func watchCAPIPhase(ptrKubeconfig *string) error {
 			return err
 		}
 	} else {
-		go updateCAPIPhase1(ptrKubeconfig, app, capiWindows, chanResult)
+		go updateCAPIPhase1(kubeconfig, app, capiWindows, chanResult)
 		log.Debugf("watchCAPIPhase: updateCAPIPhase1: chan = %+v", <-chanResult)
 
-		go updateCAPIPhase2(ptrKubeconfig, app, capiWindows, chanResult)
+		go updateCAPIPhase2(kubeconfig, app, capiWindows, chanResult)
 		log.Debugf("watchCAPIPhase: updateCAPIPhase2: chan = %+v", <-chanResult)
 
-		go updateCAPIPhase3(ptrKubeconfig, app, capiWindows, chanResult)
+		go updateCAPIPhase3(kubeconfig, app, capiWindows, chanResult)
 		log.Debugf("watchCAPIPhase: updateCAPIPhase3: chan = %+v", <-chanResult)
 	}
 
 	return nil
 }
 
-func watchOpenshiftPhase(ptrKubeconfig *string) error {
+func watchOpenshiftPhase(kubeconfig string) error {
 	var (
 		cmdOcGetCo = []string{
 			"oc", "--request-timeout=5s", "get", "co", "-o", "json",
@@ -382,7 +397,7 @@ if true {
 	return nil
 }
 
-	jsonCo, err = runSplitCommandJson(ptrKubeconfig, cmdOcGetCo)
+	jsonCo, err = runSplitCommandJson(kubeconfig, cmdOcGetCo)
 	if err != nil {
 		return fmt.Errorf("Error: could not run command: %v", err)
 	}

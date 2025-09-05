@@ -93,14 +93,14 @@ func checkKubeconfigCommand(checkKubeconfigFlags *flag.FlagSet, args []string) e
 	fmt.Fprintf(os.Stderr, "Program version is %v, release = %v\n", version, release)
 
 	for _, cmd := range cmds {
-		err = runCommand(ptrKubeconfig, cmd)
+		err = runCommand(*ptrKubeconfig, cmd)
 		if err != nil {
 			fmt.Printf("Error: could not run command: %v\n", err)
 		}
 	}
 
 	for _, twoCmds := range pipeCmds {
-		err = runTwoCommands(ptrKubeconfig, twoCmds[0], twoCmds[1])
+		err = runTwoCommands(*ptrKubeconfig, twoCmds[0], twoCmds[1])
 		if err != nil {
 			fmt.Printf("Error: could not run command: %v\n", err)
 		}

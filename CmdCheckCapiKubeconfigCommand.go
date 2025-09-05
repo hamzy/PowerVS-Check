@@ -81,7 +81,7 @@ func checkCapiKubeconfigCommand(checkCapiKubeconfigFlags *flag.FlagSet, args []s
 	fmt.Fprintf(os.Stderr, "Program version is %v, release = %v\n", version, release)
 
 	for _, twoCmds := range cmds {
-		err = runTwoCommands(ptrKubeconfig, twoCmds[0], twoCmds[1])
+		err = runTwoCommands(*ptrKubeconfig, twoCmds[0], twoCmds[1])
 		if err != nil {
 			fmt.Printf("Error: could not run command: %v\n", err)
 		}
