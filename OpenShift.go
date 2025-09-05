@@ -86,6 +86,11 @@ func getJsonMapString(jsonMap map[string]any, key string, bufferedChannel chan e
 }
 
 func getJsonMapBool(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapBool bool) {
+	jsonMapBool, ok := jsonMap[key].(bool)
+	if ok {
+		return
+	}
+	// Fallback to string attempt
 	jsonMapString, ok := jsonMap[key].(string)
 	if !ok {
 		bufferedChannel<-fmt.Errorf("getJsonMapBool: jsonMap[%s] returned error", key)
@@ -163,10 +168,13 @@ func getPVSCluster(jsonPVSCluster map[string]any, bufferedChannel chan error) (a
 			Status: status,
 			Type:   stringType,
 		}
-		log.Debugf("sc = %+v", sc)
+		log.Debugf("getPVSCluster: sc = %+v", sc)
 
 		aconditions = append(aconditions, sc)
 	}
+
+	clusterReady = getJsonMapBool(statusMap, "ready", bufferedChannel)
+	log.Debugf("getPVSCluster: clusterReady = %v", clusterReady)
 
 	return
 }
@@ -215,7 +223,7 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 				Status: status,
 				Type:   stringType,
 			}
-			log.Debugf("sc = %+v", sc)
+			log.Debugf("getPVSMachines: sc = %+v", sc)
 
 			aconditions = append(aconditions, sc)
 		}
@@ -261,7 +269,7 @@ func getPVSImage(jsonPVSImage map[string]any, bufferedChannel chan error) (acond
 			Status: status,
 			Type:   stringType,
 		}
-		log.Debugf("sc = %+v", sc)
+		log.Debugf("getPVSImage: sc = %+v", sc)
 
 		aconditions = append(aconditions, sc)
 	}
@@ -280,7 +288,7 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 		bufferedChannel<-fmt.Errorf("getPVSImage: len of JSON items != 1 (%d)", len(rootItemArray))
 		return
 	}
-	log.Debugf("len(rootItemArray) = %d", len(rootItemArray))
+	log.Debugf("getClusterOperator: len(rootItemArray) = %d", len(rootItemArray))
 
 	found = false
 
