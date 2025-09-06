@@ -43,9 +43,9 @@ func NewLoadBalancer(services *Services) ([]RunnableObject, []error) {
 		ros      []RunnableObject
 	)
 
-	lbs, errs = NewLoadBalancerAlt(services)
+	lbs, errs = innerNewLoadBalancer(services)
 
-	ros = make([]RunnableObject, 3)
+	ros = make([]RunnableObject, len(lbs))
 	// Go does not support type converting the entire array.
 	// So we do it manually.
 	for i, v := range lbs {

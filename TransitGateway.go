@@ -41,13 +41,36 @@ const (
 
 func NewTransitGateway(services *Services) ([]RunnableObject, []error) {
 	var (
+		tgs      []*TransitGateway
+		errs     []error
+		ros      []RunnableObject
+	)
+
+	tgs, errs = innerNewTransitGateway(services)
+
+	ros = make([]RunnableObject, len(tgs))
+	// Go does not support type converting the entire array.
+	// So we do it manually.
+	for i, v := range tgs {
+		ros[i] = RunnableObject(v)
+	}
+
+	return ros, errs
+}
+
+func NewTransitGatewayAlt(services *Services) ([]*TransitGateway, []error) {
+	return innerNewTransitGateway(services)
+}
+
+func innerNewTransitGateway(services *Services) ([]*TransitGateway, []error) {
+	var (
 		tgName         string
 		tgClient       *transitgatewayapisv1.TransitGatewayApisV1
 		ctx            context.Context
 		cancel         context.CancelFunc
 		foundInstances []string
 		tg             *TransitGateway
-		tgs            []RunnableObject
+		tgs            []*TransitGateway
 		errs           []error
 		idxTg          int
 		err            error
@@ -61,7 +84,7 @@ func NewTransitGateway(services *Services) ([]RunnableObject, []error) {
 
 	tgName, err = services.GetMetadata().GetObjectName(RunnableObject(&TransitGateway{}))
 	if err != nil {
-		return []RunnableObject{tg}, []error{err}
+		return []*TransitGateway{tg}, []error{err}
 	}
 	log.Debugf("NewTransitGateway: tgName = %s", tgName)
 	if tgName == "" {
@@ -80,11 +103,11 @@ func NewTransitGateway(services *Services) ([]RunnableObject, []error) {
 		foundInstances, err = findTransitGateway(tgClient, ctx, tgName)
 	}
 	if err != nil {
-		return []RunnableObject{tg}, []error{err}
+		return []*TransitGateway{tg}, []error{err}
 	}
 	log.Debugf("NewTransitGateway: foundInstances = %+v, err = %v", foundInstances, err)
 
-	tgs = make([]RunnableObject, 1)
+	tgs = make([]*TransitGateway, 1)
 	errs = make([]error, 1)
 
 	idxTg = 0

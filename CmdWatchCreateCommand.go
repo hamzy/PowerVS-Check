@@ -447,7 +447,7 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 
 	for true {
 		if intLb != nil {
-			if intLb.CheckLoadBalancerPool([]string{"pool-6443"}, "port 6443") {
+			if intLb.CheckLoadBalancerPool([]string{"machine-config-server", "additional-pool-22623"}, "machine config server") {
 				break
 			}
 		}

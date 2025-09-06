@@ -38,20 +38,43 @@ const (
 
 func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 	var (
+		vpcis    []*VpcInstance
+		errs     []error
+		ros      []RunnableObject
+	)
+
+	vpcis, errs = innerNewVpcInstance(services)
+
+	ros = make([]RunnableObject, len(vpcis))
+	// Go does not support type converting the entire array.
+	// So we do it manually.
+	for i, v := range vpcis {
+		ros[i] = RunnableObject(v)
+	}
+
+	return ros, errs
+}
+
+func NewVpcInstanceAlt(services *Services) ([]*VpcInstance, []error) {
+	return innerNewVpcInstance(services)
+}
+
+func innerNewVpcInstance(services *Services) ([]*VpcInstance, []error) {
+	var (
 		vpcInstanceName string
 		resourceGroupID string
 		vpcSvc          *vpcv1.VpcV1
 		ctx             context.Context
 		cancel          context.CancelFunc
 		foundInstances  []string
-		vpcis           []RunnableObject
+		vpcis           []*VpcInstance
 		errs            []error
 		err             error
 	)
 
 	vpcInstanceName, err = services.GetMetadata().GetObjectName(RunnableObject(&VpcInstance{}))
 	if err != nil {
-		return []RunnableObject{&VpcInstance{
+		return []*VpcInstance{&VpcInstance{
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
@@ -63,7 +86,7 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 
 	resourceGroupID, err = services.ResourceGroupNameToID(resourceGroupID)
 	if err != nil {
-		return []RunnableObject{&VpcInstance{
+		return []*VpcInstance{&VpcInstance{
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
@@ -81,7 +104,7 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 		foundInstances, err = findVPCInstancesByName(vpcSvc, ctx, vpcInstanceName, resourceGroupID)
 	}
 	if err != nil {
-		return []RunnableObject{&VpcInstance{
+		return []*VpcInstance{&VpcInstance{
 			name:             vpcInstanceName,
 			services:         services,
 			innerVpcInstance: nil,
@@ -89,7 +112,7 @@ func NewVpcInstance(services *Services) ([]RunnableObject, []error) {
 	}
 	log.Debugf("NewVpcInstance: foundInstances = %+v, err = %v", foundInstances, err)
 
-	vpcis = make([]RunnableObject, 0)
+	vpcis = make([]*VpcInstance, 0)
 	errs = make([]error, 0)
 
 	if len(foundInstances) == 0 {

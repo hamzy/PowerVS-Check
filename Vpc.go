@@ -42,6 +42,29 @@ const (
 
 func NewVpc(services *Services) ([]RunnableObject, []error) {
 	var (
+		vpcs     []*Vpc
+		errs     []error
+		ros      []RunnableObject
+	)
+
+	vpcs, errs = innerNewVpc(services)
+
+	ros = make([]RunnableObject, len(vpcs))
+	// Go does not support type converting the entire array.
+	// So we do it manually.
+	for i, v := range vpcs {
+		ros[i] = RunnableObject(v)
+	}
+
+	return ros, errs
+}
+
+func NewVpcAlt(services *Services) ([]*Vpc, []error) {
+	return innerNewVpc(services)
+}
+
+func innerNewVpc(services *Services) ([]*Vpc, []error) {
+	var (
 		vpcName        string
 		region         string
 		vpcRegion      string
@@ -50,7 +73,7 @@ func NewVpc(services *Services) ([]RunnableObject, []error) {
 		cancel         context.CancelFunc
 		foundInstances []string
 		vpc            *Vpc
-		vpcs           []RunnableObject
+		vpcs           []*Vpc
 		errs           []error
 		idxVpc         int
 		err            error
@@ -64,7 +87,7 @@ func NewVpc(services *Services) ([]RunnableObject, []error) {
 
 	vpcName, err = services.GetMetadata().GetObjectName(RunnableObject(&Vpc{}))
 	if err != nil {
-		return []RunnableObject{vpc}, []error{err}
+		return []*Vpc{vpc}, []error{err}
 	}
 	log.Debugf("NewVpc: vpcName = %s", vpcName)
 	if vpcName == "" {
@@ -77,7 +100,7 @@ func NewVpc(services *Services) ([]RunnableObject, []error) {
 
 	vpcRegion, err = services.GetMetadata().GetVPCRegion()
 	if err != nil {
-		return []RunnableObject{vpc}, []error{err}
+		return []*Vpc{vpc}, []error{err}
 	}
 	log.Debugf("NewVpc: vpcRegion = %s", vpcRegion)
 
@@ -92,11 +115,11 @@ func NewVpc(services *Services) ([]RunnableObject, []error) {
 		foundInstances, err = findVpcs(vpcName, vpcSvc, ctx)
 	}
 	if err != nil {
-		return []RunnableObject{vpc}, []error{err}
+		return []*Vpc{vpc}, []error{err}
 	}
 	log.Debugf("NewVpc: foundInstances = %+v, err = %v", foundInstances, err)
 
-	vpcs = make([]RunnableObject, 1)
+	vpcs = make([]*Vpc, 1)
 	errs = make([]error, 1)
 
 	idxVpc = 0
