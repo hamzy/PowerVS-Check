@@ -353,6 +353,8 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 				cc.Progressing = statusResult
 			case "Upgradeable":
 				cc.Upgradeable = statusResult
+			default:
+				log.Debugf("getClusterOperator: unknown type %s", typeResult)
 			}
 		}
 	}
@@ -360,6 +362,47 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 	if !found {
 		bufferedChannel<-fmt.Errorf("Could not find cluster operator named %s", name)
 		return
+	}
+
+	return
+}
+
+func getDeployment(jsonDeployment map[string]any, bufferedChannel chan error) (cc clusterConditions) {
+	var (
+		statusMap       map[string]any
+		conditionsArray []any
+	)
+
+	statusMap = getJsonMapValue(jsonDeployment, "status", bufferedChannel)
+	log.Debugf("getDeployment: statusMap = %+v", statusMap)
+
+	if ok := jsonMapHasKey(statusMap, "conditions", bufferedChannel); ok {
+		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
+	} else {
+		conditionsArray = nil
+	}
+	log.Debugf("getDeployment: conditionsArray = %+v", conditionsArray)
+
+	for _, conditionItem := range conditionsArray {
+		var (
+			conditionMap map[string]any
+			typeResult   string
+			statusResult string
+		)
+
+		conditionMap = getJsonMap(conditionItem, bufferedChannel)
+
+		typeResult = getJsonMapString(conditionMap, "type", bufferedChannel)
+		statusResult = getJsonMapString(conditionMap, "status", bufferedChannel)
+
+		switch typeResult {
+		case "Available":
+			cc.Available = statusResult
+		case "Progressing":
+			cc.Progressing = statusResult
+		default:
+			log.Debugf("getDeployment: unknown type %s", typeResult)
+		}
 	}
 
 	return

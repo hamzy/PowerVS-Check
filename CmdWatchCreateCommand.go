@@ -396,6 +396,22 @@ func watchCAPIPhases(kubeconfig string) error {
 	return nil
 }
 
+func printStatus(status string, label string, printSpace bool) {
+	switch status {
+	case "True":
+		fmt.Printf("%s", label)
+	case "False":
+		fmt.Printf("NOT %s", label)
+	case "":
+		fmt.Printf("(EMPTY) %s", label)
+	default:
+		fmt.Printf("(ERROR %s) %s", status, label)
+	}
+	if printSpace {
+		fmt.Printf(", ")
+	}
+}
+
 func watchOpenshiftPhases(installDir string, apiKey string) error {
 	var (
 		metadataLocation    string
@@ -415,6 +431,7 @@ func watchOpenshiftPhases(installDir string, apiKey string) error {
 
 	for _, phase := range []func(installDir string, apiKey string) error {
 		updateOpenshiftPhase1,
+		updateOpenshiftPhase2,
 		updateOpenshiftPhase99,
 	} {
 		err = phase(installDir, apiKey)
@@ -484,6 +501,47 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 	return nil
 }
 
+func updateOpenshiftPhase2(installDir string, apiKey string) error {
+	var (
+		cmdOcGetDeployment = []string{
+			"oc", "get", "deployment/powervs-cloud-controller-manager", "-n", "openshift-cloud-controller-manager", "-o", "json",
+		}
+		jsonOGD            map[string]interface{}
+		cc                 clusterConditions
+		err                error
+	)
+
+	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
+
+	if useSavedJson {
+		jsonOGD, err = parseJsonFile("ocgetdeploymentpccm1.json")
+	} else {
+		jsonOGD, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetDeployment)
+	}
+	if err != nil {
+		return fmt.Errorf("Error: could not run command: %v", err)
+	}
+//	log.Debugf("updateOpenshiftPhase2: jsonOGD = %+v", jsonOGD)
+
+	// @TODO is there a way to avoid the large hardcoded value?
+	bufferedChannel := make(chan error, 100)
+
+	cc = getDeployment(jsonOGD, bufferedChannel)
+
+	err = gatherBufferedErrors(bufferedChannel)
+	if err != nil {
+		log.Debugf("updateOpenshiftPhase2: getClusterOperator returns %v", err)
+	} else {
+		log.Debugf("updateOpenshiftPhase2: cc = %+v", cc)
+	}
+
+	fmt.Printf("The deployment of powervs-cloud-controller-manager is: ")
+	printStatus(cc.Available, "AVAILABLE", false)
+	fmt.Printf("\n")
+
+	return err
+}
+
 func updateOpenshiftPhase99(installDir string, apiKey string) error {
 	var (
 		cmdOcGetCo = []string{
@@ -512,25 +570,9 @@ func updateOpenshiftPhase99(installDir string, apiKey string) error {
 
 	err = gatherBufferedErrors(bufferedChannel)
 	if err != nil {
-		log.Debugf("watchOpenshiftPhase: getClusterOperator returns %v", err)
+		log.Debugf("updateOpenshiftPhase99: getClusterOperator returns %v", err)
 	} else {
-		log.Debugf("watchOpenshiftPhase: cc = %+v", cc)
-	}
-
-	printStatus := func(status string, label string, printSpace bool) {
-		switch status {
-		case "True":
-			fmt.Printf("%s", label)
-		case "False":
-			fmt.Printf("NOT %s", label)
-		case "":
-			fmt.Printf("(EMPTY) %s", label)
-		default:
-			fmt.Printf("(ERROR %s) %s", status, label)
-		}
-		if printSpace {
-			fmt.Printf(", ")
-		}
+		log.Debugf("updateOpenshiftPhase99: cc = %+v", cc)
 	}
 
 	fmt.Printf("The authentication cluster operator is: ")
