@@ -62,6 +62,11 @@ func parseJsonFile(filename string) (map[string]interface{}, error) {
 	return jsonData, err
 }
 
+func jsonMapHasKey(jsonMap map[string]any, key string, bufferedChannel chan error) (ok bool) {
+	_, ok = jsonMap[key]
+	return
+}
+
 func getJsonArrayValue(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonArrayValue []any) {
 	jsonArrayValue, ok := jsonMap[key].([]any)
 	if !ok {
@@ -308,6 +313,8 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 			continue
 		}
 
+//		log.Debugf("clusterItem = %+v", clusterItem)
+
 		cc.Name = metadataName
 
 		found = true
@@ -319,7 +326,11 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 //		log.Debugf("type = %T", value)
 //		log.Debugf("exists = %v", exists)
 
-		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
+		if ok := jsonMapHasKey(statusMap, "conditions", bufferedChannel); ok {
+			conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
+		} else {
+			conditionsArray = nil
+		}
 
 		for _, conditionItem := range conditionsArray {
 			var (

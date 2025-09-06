@@ -34,7 +34,7 @@ import (
 
 const (
 	useTview = false
-	useSavedJson = true
+	useSavedJson = false
 )
 
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
@@ -99,18 +99,9 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		return err
 	}
 
-	if _, err = os.Stat(kubeconfigCapi); errors.Is(err, os.ErrNotExist) && !useSavedJson {
+	err = watchOpenshiftPhases(*ptrInstallDir, *ptrApiKey)
+	if err != nil {
 		return err
-	}
-
-	for _, phase := range []func(installDir string, apiKey string) error {
-		watchOpenshiftPhase1,
-		watchOpenshiftPhase99,
-	} {
-		err = phase(*ptrInstallDir, *ptrApiKey)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -329,6 +320,7 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 			}
 		} else {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v", conditionsReady)
+			break // @HACK
 		}
 
 		time.Sleep(10 * time.Second)
@@ -404,7 +396,37 @@ func watchCAPIPhases(kubeconfig string) error {
 	return nil
 }
 
-func watchOpenshiftPhase1(installDir string, apiKey string) error {
+func watchOpenshiftPhases(installDir string, apiKey string) error {
+	var (
+		metadataLocation    string
+		kubeconfigOpenshift string
+		err                 error
+	)
+
+	metadataLocation = filepath.Join(installDir, "metadata.json")
+	kubeconfigOpenshift = filepath.Join(installDir, "auth/kubeconfig")
+
+	if _, err = os.Stat(metadataLocation); errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, err = os.Stat(kubeconfigOpenshift); errors.Is(err, os.ErrNotExist) && !useSavedJson {
+		return err
+	}
+
+	for _, phase := range []func(installDir string, apiKey string) error {
+		updateOpenshiftPhase1,
+		updateOpenshiftPhase99,
+	} {
+		err = phase(installDir, apiKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateOpenshiftPhase1(installDir string, apiKey string) error {
 	var (
 		metadata       *Metadata
 		services       *Services
@@ -462,7 +484,7 @@ func watchOpenshiftPhase1(installDir string, apiKey string) error {
 	return nil
 }
 
-func watchOpenshiftPhase99(installDir string, apiKey string) error {
+func updateOpenshiftPhase99(installDir string, apiKey string) error {
 	var (
 		cmdOcGetCo = []string{
 			"oc", "--request-timeout=5s", "get", "co", "-o", "json",
@@ -494,6 +516,29 @@ func watchOpenshiftPhase99(installDir string, apiKey string) error {
 	} else {
 		log.Debugf("watchOpenshiftPhase: cc = %+v", cc)
 	}
+
+	printStatus := func(status string, label string, printSpace bool) {
+		switch status {
+		case "True":
+			fmt.Printf("%s", label)
+		case "False":
+			fmt.Printf("NOT %s", label)
+		case "":
+			fmt.Printf("(EMPTY) %s", label)
+		default:
+			fmt.Printf("(ERROR %s) %s", status, label)
+		}
+		if printSpace {
+			fmt.Printf(", ")
+		}
+	}
+
+	fmt.Printf("The authentication cluster operator is: ")
+	printStatus(cc.Available, "AVAILABLE", true)
+	printStatus(cc.Degraded, "DEGRADED", true)
+	printStatus(cc.Progressing, "PROGRESSING", true)
+	printStatus(cc.Upgradeable, "UPGRADEABLE", false)
+	fmt.Printf("\n")
 
 	return err
 }
