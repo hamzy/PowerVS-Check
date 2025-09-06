@@ -42,13 +42,13 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		out            io.Writer
 		ptrApiKey      *string
 		ptrShouldDebug *string
-		ptrKubeconfig  *string
+		ptrInstallDir  *string
 		err            error
 	)
 
 	ptrApiKey = watchCreateClusterFlags.String("apiKey", "", "Your IBM Cloud API key")
 	ptrShouldDebug = watchCreateClusterFlags.String("shouldDebug", "false", "Should output debug output")
-	ptrKubeconfig = watchCreateClusterFlags.String("kubeconfig", "", "The KUBECONFIG file")
+	ptrInstallDir = watchCreateClusterFlags.String("installDir", "", "The KUBECONFIG file")
 
 	watchCreateClusterFlags.Parse(args)
 
@@ -82,13 +82,13 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		return err
 	}
 
-	if *ptrKubeconfig == "" {
-		return fmt.Errorf("Error: No KUBECONFIG key set, use -kubeconfig")
+	if *ptrInstallDir == "" {
+		return fmt.Errorf("Error: No installation directory set, use -installDir")
 	}
 
 	fmt.Fprintf(os.Stderr, "Program version is %v, release = %v\n", version, release)
 
-	kubeconfigCapi := filepath.Join(*ptrKubeconfig, ".clusterapi_output/envtest.kubeconfig")
+	kubeconfigCapi := filepath.Join(*ptrInstallDir, ".clusterapi_output/envtest.kubeconfig")
 
 	if _, err = os.Stat(kubeconfigCapi); errors.Is(err, os.ErrNotExist) && !useSavedJson {
 		return err
@@ -99,20 +99,18 @@ func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) er
 		return err
 	}
 
-	kubeconfigOpenshift := filepath.Join(*ptrKubeconfig, "auth/kubeconfig")
-
-	if _, err = os.Stat(kubeconfigOpenshift); errors.Is(err, os.ErrNotExist) && !useSavedJson {
+	if _, err = os.Stat(kubeconfigCapi); errors.Is(err, os.ErrNotExist) && !useSavedJson {
 		return err
 	}
 
-	err = watchOpenshiftPhase1(*ptrKubeconfig, *ptrApiKey)
-	if err != nil {
-		return err
-	}
-
-	err = watchOpenshiftPhase2(kubeconfigOpenshift)
-	if err != nil {
-		return err
+	for _, phase := range []func(installDir string, apiKey string) error {
+		watchOpenshiftPhase1,
+		watchOpenshiftPhase99,
+	} {
+		err = phase(*ptrInstallDir, *ptrApiKey)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -399,7 +397,7 @@ func watchCAPIPhases(kubeconfig string) error {
 	return nil
 }
 
-func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
+func watchOpenshiftPhase1(installDir string, apiKey string) error {
 	var (
 		metadata       *Metadata
 		services       *Services
@@ -409,7 +407,7 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 		err            error
 	)
 
-	metadataLocation := filepath.Join(kubeconfig, "metadata.json")
+	metadataLocation := filepath.Join(installDir, "metadata.json")
 
 	metadata, err = NewMetadataFromCCMetadata(metadataLocation)
 	if err != nil {
@@ -457,7 +455,7 @@ func watchOpenshiftPhase1(kubeconfig string, apiKey string) error {
 	return nil
 }
 
-func watchOpenshiftPhase2(kubeconfig string) error {
+func watchOpenshiftPhase99(installDir string, apiKey string) error {
 	var (
 		cmdOcGetCo = []string{
 			"oc", "--request-timeout=5s", "get", "co", "-o", "json",
@@ -467,10 +465,12 @@ func watchOpenshiftPhase2(kubeconfig string) error {
 		err        error
 	)
 
+	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
+
 	if useSavedJson {
 		jsonCo, err = parseJsonFile("ocgetco1.json")
 	} else {
-		jsonCo, err = runSplitCommandJson(kubeconfig, cmdOcGetCo)
+		jsonCo, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetCo)
 	}
 	if err != nil {
 		return fmt.Errorf("Error: could not run command: %v", err)
