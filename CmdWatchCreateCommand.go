@@ -34,7 +34,7 @@ import (
 
 const (
 	useTview = false
-	useSavedJson = false
+	useSavedJson = true
 )
 
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
@@ -163,10 +163,12 @@ func updateCAPIPhase1(kubeconfig string, app *tview.Application, capiWindows map
 
 		conditionsReady = true
 		for _, condition := range aconditions {
-			_, ok = capiWindows[condition.Type]
-			log.Debugf("updateCAPIPhase1: condition = %+v, ok = %v", condition, ok)
-			if !ok {
-				continue
+			if useTview {
+				_, ok = capiWindows[condition.Type]
+				log.Debugf("updateCAPIPhase1: condition = %+v, ok = %v", condition, ok)
+				if !ok {
+					continue
+				}
 			}
 			if condition.Status {
 				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
@@ -179,6 +181,11 @@ func updateCAPIPhase1(kubeconfig string, app *tview.Application, capiWindows map
 		if conditionsReady {
 			log.Debugf("updateCAPIPhase1: conditionsReady = %v, len(aconditions) = %d", conditionsReady, len(aconditions))
 			log.Debugf("updateCAPIPhase1: clusterReady = %v", clusterReady)
+			if clusterReady {
+				fmt.Println("Cluster is READY")
+			} else {
+				fmt.Println("Cluster is NOT READY")
+			}
 
 			if len(aconditions) == 8 && clusterReady {
 				err = nil
