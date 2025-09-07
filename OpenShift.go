@@ -33,9 +33,10 @@ type clusterConditions struct {
 }
 
 type statusCondition struct {
-	Name   string
-	Status bool
-	Type   string
+	Name    string
+	Address string
+	Status  bool
+	Type    string
 }
 
 func parseJsonFile(filename string) (map[string]interface{}, error) {
@@ -200,6 +201,8 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 			metadataMap     map[string]any
 			name            string
 			statusMap       map[string]any
+			addressesArray  []any
+			address         string
 			conditionsArray []any
 		)
 
@@ -209,6 +212,26 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 		name = getJsonMapString(metadataMap, "name", bufferedChannel)
 
 		statusMap = getJsonMapValue(itemMap, "status", bufferedChannel)
+		addressesArray = getJsonArrayValue(statusMap, "addresses", bufferedChannel)
+
+		address = ""
+		for _, addresseItem := range addressesArray {
+			var (
+				addressItemMap map[string]any
+				stringAddress  string
+				stringType     string
+			)
+
+			addressItemMap = getJsonMap(addresseItem, bufferedChannel)
+
+			stringAddress = getJsonMapString(addressItemMap, "address", bufferedChannel)
+			stringType = getJsonMapString(addressItemMap, "type", bufferedChannel)
+
+			if stringType == "InternalIP" {
+				address = stringAddress
+			}
+		}
+
 		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
 
 		for _, conditionItem := range conditionsArray {
@@ -225,9 +248,10 @@ func getPVSMachines(jsonPVSMachines map[string]any, bufferedChannel chan error) 
 			stringType = getJsonMapString(conditionItemMap, "type", bufferedChannel)
 
 			sc = statusCondition{
-				Name:   name,
-				Status: status,
-				Type:   stringType,
+				Name:    name,
+				Address: address,
+				Status:  status,
+				Type:    stringType,
 			}
 			log.Debugf("getPVSMachines: sc = %+v", sc)
 
@@ -374,14 +398,14 @@ func getDeployment(jsonDeployment map[string]any, bufferedChannel chan error) (c
 	)
 
 	statusMap = getJsonMapValue(jsonDeployment, "status", bufferedChannel)
-	log.Debugf("getDeployment: statusMap = %+v", statusMap)
+//	log.Debugf("getDeployment: statusMap = %+v", statusMap)
 
 	if ok := jsonMapHasKey(statusMap, "conditions", bufferedChannel); ok {
 		conditionsArray = getJsonArrayValue(statusMap, "conditions", bufferedChannel)
 	} else {
 		conditionsArray = nil
 	}
-	log.Debugf("getDeployment: conditionsArray = %+v", conditionsArray)
+//	log.Debugf("getDeployment: conditionsArray = %+v", conditionsArray)
 
 	for _, conditionItem := range conditionsArray {
 		var (

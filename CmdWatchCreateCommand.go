@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -149,7 +150,11 @@ func updateCAPIPhase1(kubeconfig string, app *tview.Application, capiWindows map
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
-			break
+			continue
+		}
+
+		if !useTview {
+			fmt.Println("Querying the IBMPowerVSCluster: 8<--------8<--------")
 		}
 
 		conditionsReady = true
@@ -230,7 +235,11 @@ func updateCAPIPhase2(kubeconfig string, app *tview.Application, capiWindows map
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
-			break
+			continue
+		}
+
+		if !useTview {
+			fmt.Println("Querying the IBMPowerVSImage: 8<--------8<--------")
 		}
 
 		conditionsReady = true
@@ -298,18 +307,37 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
-			break
+			continue
+		}
+
+		if !useTview {
+			fmt.Println("Querying the IBMPowerVSMachines: 8<--------8<--------")
 		}
 
 		conditionsReady = true
 		for _, condition := range aconditions {
+			var (
+				buf bytes.Buffer
+			)
+
 			log.Debugf("updateCAPIPhase3: condition = %+v", condition)
+
+			fmt.Fprintf(&buf, "%s is ", condition.Name)
 			if condition.Status {
-				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is READY", condition.Type))
+				fmt.Fprintf(&buf, "READY")
 			} else {
 				conditionsReady = false
-				updateWindow(capiWindows, condition.Type, fmt.Sprintf("%s is NOT READY", condition.Type))
+				fmt.Fprintf(&buf, "NOT READY")
 			}
+
+			if condition.Address == "" {
+				conditionsReady = false
+				fmt.Fprintf(&buf, ", address is empty")
+			} else {
+				fmt.Fprintf(&buf, ", address is %s", condition.Address)
+			}
+
+			fmt.Println(buf.String())
 		}
 
 		if conditionsReady {
@@ -320,7 +348,6 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 			}
 		} else {
 			log.Debugf("updateCAPIPhase3: conditionsReady = %v", conditionsReady)
-			break // @HACK
 		}
 
 		time.Sleep(10 * time.Second)
@@ -432,6 +459,7 @@ func watchOpenshiftPhases(installDir string, apiKey string) error {
 	for _, phase := range []func(installDir string, apiKey string) error {
 		updateOpenshiftPhase1,
 		updateOpenshiftPhase2,
+		updateOpenshiftPhase3,
 		updateOpenshiftPhase99,
 	} {
 		err = phase(installDir, apiKey)
@@ -502,6 +530,10 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 }
 
 func updateOpenshiftPhase2(installDir string, apiKey string) error {
+	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "network")
+}
+
+func updateOpenshiftPhase3(installDir string, apiKey string) error {
 	var (
 		cmdOcGetDeployment = []string{
 			"oc", "get", "deployment/powervs-cloud-controller-manager", "-n", "openshift-cloud-controller-manager", "-o", "json",
@@ -513,36 +545,48 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 
 	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
 
-	if useSavedJson {
-		jsonOGD, err = parseJsonFile("ocgetdeploymentpccm1.json")
-	} else {
-		jsonOGD, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetDeployment)
+	for true {
+		if useSavedJson {
+			jsonOGD, err = parseJsonFile("ocgetdeploymentpccm1.json")
+		} else {
+			jsonOGD, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetDeployment)
+		}
+		if err != nil {
+			return fmt.Errorf("Error: could not run command: %v", err)
+		}
+//		log.Debugf("updateOpenshiftPhase2: jsonOGD = %+v", jsonOGD)
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		cc = getDeployment(jsonOGD, bufferedChannel)
+
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
+			log.Debugf("updateOpenshiftPhase2: getClusterOperator returns %v", err)
+		} else {
+			log.Debugf("updateOpenshiftPhase2: cc = %+v", cc)
+		}
+
+		fmt.Printf("The deployment of powervs-cloud-controller-manager is: ")
+		printStatus(cc.Available, "AVAILABLE", false)
+		fmt.Printf("\n")
+
+		if cc.Available == "True" {
+			break
+		}
+
+		time.Sleep(10 * time.Second)
 	}
-	if err != nil {
-		return fmt.Errorf("Error: could not run command: %v", err)
-	}
-//	log.Debugf("updateOpenshiftPhase2: jsonOGD = %+v", jsonOGD)
-
-	// @TODO is there a way to avoid the large hardcoded value?
-	bufferedChannel := make(chan error, 100)
-
-	cc = getDeployment(jsonOGD, bufferedChannel)
-
-	err = gatherBufferedErrors(bufferedChannel)
-	if err != nil {
-		log.Debugf("updateOpenshiftPhase2: getClusterOperator returns %v", err)
-	} else {
-		log.Debugf("updateOpenshiftPhase2: cc = %+v", cc)
-	}
-
-	fmt.Printf("The deployment of powervs-cloud-controller-manager is: ")
-	printStatus(cc.Available, "AVAILABLE", false)
-	fmt.Printf("\n")
 
 	return err
 }
 
 func updateOpenshiftPhase99(installDir string, apiKey string) error {
+	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "authentication")
+}
+
+func updateOpenshiftPhaseClusterOperator(installDir string, apiKey string, operator string) error {
 	var (
 		cmdOcGetCo = []string{
 			"oc", "--request-timeout=5s", "get", "co", "-o", "json",
@@ -554,33 +598,41 @@ func updateOpenshiftPhase99(installDir string, apiKey string) error {
 
 	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
 
-	if useSavedJson {
-		jsonCo, err = parseJsonFile("ocgetco1.json")
-	} else {
-		jsonCo, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetCo)
+	for true {
+		if useSavedJson {
+			jsonCo, err = parseJsonFile("ocgetco1.json")
+		} else {
+			jsonCo, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetCo)
+		}
+		if err != nil {
+			return fmt.Errorf("Error: could not run command: %v", err)
+		}
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		cc = getClusterOperator(jsonCo, operator, bufferedChannel)
+
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
+			log.Debugf("updateOpenshiftPhaseClusterOperator: getClusterOperator returns %v", err)
+		} else {
+			log.Debugf("updateOpenshiftPhaseClusterOperator: cc = %+v", cc)
+		}
+
+		fmt.Printf("The %s cluster operator is: ", operator)
+		printStatus(cc.Available, "AVAILABLE", true)
+		printStatus(cc.Degraded, "DEGRADED", true)
+		printStatus(cc.Progressing, "PROGRESSING", true)
+		printStatus(cc.Upgradeable, "UPGRADEABLE", false)
+		fmt.Printf("\n")
+
+		if cc.Available == "True" {
+			break
+		}
+
+		time.Sleep(10 * time.Second)
 	}
-	if err != nil {
-		return fmt.Errorf("Error: could not run command: %v", err)
-	}
-
-	// @TODO is there a way to avoid the large hardcoded value?
-	bufferedChannel := make(chan error, 100)
-
-	cc = getClusterOperator(jsonCo, "authentication", bufferedChannel)
-
-	err = gatherBufferedErrors(bufferedChannel)
-	if err != nil {
-		log.Debugf("updateOpenshiftPhase99: getClusterOperator returns %v", err)
-	} else {
-		log.Debugf("updateOpenshiftPhase99: cc = %+v", cc)
-	}
-
-	fmt.Printf("The authentication cluster operator is: ")
-	printStatus(cc.Available, "AVAILABLE", true)
-	printStatus(cc.Degraded, "DEGRADED", true)
-	printStatus(cc.Progressing, "PROGRESSING", true)
-	printStatus(cc.Upgradeable, "UPGRADEABLE", false)
-	fmt.Printf("\n")
 
 	return err
 }
