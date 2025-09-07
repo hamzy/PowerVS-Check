@@ -460,6 +460,7 @@ func watchOpenshiftPhases(installDir string, apiKey string) error {
 		updateOpenshiftPhase1,
 		updateOpenshiftPhase2,
 		updateOpenshiftPhase3,
+		updateOpenshiftPhase4,
 		updateOpenshiftPhase99,
 	} {
 		err = phase(installDir, apiKey)
@@ -478,6 +479,7 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 		errs           []error
 		aloadBalancers []*LoadBalancer
 		intLb          *LoadBalancer
+		extLb          *LoadBalancer
 		err            error
 	)
 
@@ -492,8 +494,6 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 	if err != nil {
 		return fmt.Errorf("Error: Could not create a Services object (%s)!\n", err)
 	}
-
-	fmt.Fprintf(os.Stderr, "Querying the Load Balancer...\n")
 
 	aloadBalancers, errs = NewLoadBalancerAlt(services)
 	log.Debugf("aloadBalancers = %+v", aloadBalancers)
@@ -513,16 +513,35 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 			case LoadBalancerTypeInternal:
 				intLb = lb
 			case LoadBalancerTypeExternal:
+				extLb = lb
 			}
 		}
 	}
 
 	for true {
+		allReady := true
+
+		fmt.Println("Querying the Load Balancer: 8<--------8<--------")
+
 		if intLb != nil {
-			if intLb.CheckLoadBalancerPool([]string{"machine-config-server", "additional-pool-22623"}, "machine config server") {
-				break
+			if !intLb.CheckLoadBalancerPool([]string{"machine-config-server", "additional-pool-22623"}, "machine config server") {
+				allReady = false
+			}
+			if !intLb.CheckLoadBalancerPool([]string{"pool-6443", "pool 6443"}, "kubernetes port 6443") {
+				allReady = false
 			}
 		}
+
+		if extLb != nil {
+			if !extLb.CheckLoadBalancerPool([]string{"pool-6443", "pool 6443"}, "kubernetes port 6443") {
+				allReady = false
+			}
+		}
+
+		if allReady {
+			break
+		}
+
 		time.Sleep(10 * time.Second)
 	}
 
@@ -530,10 +549,80 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 }
 
 func updateOpenshiftPhase2(installDir string, apiKey string) error {
-	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "network")
+	var (
+		cmdOcGetSecrets = []string{
+			"oc", "get", "secrets", "-A", "-o", "json",
+		}
+		jsonSecrets     map[string]interface{}
+		asecretsWanted  = []secretInfo{
+			{ Name: "ibm-cloud-credentials",                       Namespace: "openshift-cloud-controller-manager" },
+			{ Name: "cloud-credentials",                           Namespace: "openshift-ingress-operator"         },
+			{ Name: "powervs-credentials",                         Namespace: "openshift-machine-api"              },
+			{ Name: "ibm-powervs-cloud-credentials",               Namespace: "openshift-cluster-csi-drivers"      },
+			{ Name: "installer-cloud-credentials",                 Namespace: "openshift-image-registry"           },
+			{ Name: "capi-ibmcloud-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"              },
+		}
+		asecretsFound   []secretInfo
+		err             error
+	)
+
+	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
+
+	for true {
+		fmt.Println("Querying the Secrets: 8<--------8<--------")
+
+		if useSavedJson {
+			jsonSecrets, err = parseJsonFile("ocgetsecrets1.json")
+		} else {
+			jsonSecrets, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetSecrets)
+		}
+		if err != nil {
+			return fmt.Errorf("Error: could not run command: %v", err)
+		}
+//		log.Debugf("updateOpenshiftPhase2: jsonSecrets = %+v", jsonOGD)
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		asecretsFound = getSecrets(jsonSecrets, bufferedChannel)
+
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
+			log.Debugf("updateOpenshiftPhase2: getSecrets returns %v", err)
+		} else {
+			log.Debugf("updateOpenshiftPhase2: asecretsFound = %+v", asecretsFound)
+		}
+
+		allFound := true
+		for _, wantSecret := range asecretsWanted {
+			foundOne := false
+			for _, foundSecret := range asecretsFound {
+				if wantSecret.Name == foundSecret.Name && wantSecret.Namespace == foundSecret.Namespace {
+					foundOne = true
+					break
+				}
+			}
+			log.Debugf("updateOpenshiftPhase2: foundOne = %v", foundOne)
+			if !foundOne {
+				allFound = false
+			}
+		}
+
+		if allFound {
+			break
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
+	return err
 }
 
 func updateOpenshiftPhase3(installDir string, apiKey string) error {
+	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "network")
+}
+
+func updateOpenshiftPhase4(installDir string, apiKey string) error {
 	var (
 		cmdOcGetDeployment = []string{
 			"oc", "get", "deployment/powervs-cloud-controller-manager", "-n", "openshift-cloud-controller-manager", "-o", "json",
@@ -554,7 +643,7 @@ func updateOpenshiftPhase3(installDir string, apiKey string) error {
 		if err != nil {
 			return fmt.Errorf("Error: could not run command: %v", err)
 		}
-//		log.Debugf("updateOpenshiftPhase2: jsonOGD = %+v", jsonOGD)
+//		log.Debugf("updateOpenshiftPhase4: jsonOGD = %+v", jsonOGD)
 
 		// @TODO is there a way to avoid the large hardcoded value?
 		bufferedChannel := make(chan error, 100)
@@ -563,9 +652,9 @@ func updateOpenshiftPhase3(installDir string, apiKey string) error {
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
-			log.Debugf("updateOpenshiftPhase2: getClusterOperator returns %v", err)
+			log.Debugf("updateOpenshiftPhase4: getDeployment returns %v", err)
 		} else {
-			log.Debugf("updateOpenshiftPhase2: cc = %+v", cc)
+			log.Debugf("updateOpenshiftPhase4: cc = %+v", cc)
 		}
 
 		fmt.Printf("The deployment of powervs-cloud-controller-manager is: ")

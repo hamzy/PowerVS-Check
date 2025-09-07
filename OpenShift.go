@@ -39,6 +39,11 @@ type statusCondition struct {
 	Type    string
 }
 
+type secretInfo struct {
+	Name      string
+	Namespace string
+}
+
 func parseJsonFile(filename string) (map[string]interface{}, error) {
 	var (
 		data     []byte
@@ -427,6 +432,38 @@ func getDeployment(jsonDeployment map[string]any, bufferedChannel chan error) (c
 		default:
 			log.Debugf("getDeployment: unknown type %s", typeResult)
 		}
+	}
+
+	return
+}
+
+func getSecrets(jsonSecrets map[string]any, bufferedChannel chan error) (asecrets []secretInfo) {
+	var (
+		rootItemArray []any
+	)
+
+	rootItemArray = getJsonArrayValue(jsonSecrets, "items", bufferedChannel)
+
+	asecrets = make([]secretInfo, 0)
+
+	for _, rootItem := range rootItemArray {
+		var (
+			itemMap     map[string]any
+			metadataMap map[string]any
+			name        string
+			namespace   string
+		)
+
+		itemMap = getJsonMap(rootItem, bufferedChannel)
+
+		metadataMap = getJsonMapValue(itemMap, "metadata", bufferedChannel)
+		name = getJsonMapString(metadataMap, "name", bufferedChannel)
+		namespace = getJsonMapString(metadataMap, "namespace", bufferedChannel)
+
+		asecrets = append(asecrets, secretInfo{
+			Name:      name,
+			Namespace: namespace,
+		})
 	}
 
 	return
