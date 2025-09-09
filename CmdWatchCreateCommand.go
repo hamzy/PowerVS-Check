@@ -789,6 +789,15 @@ func updateOpenshiftPhaseClusterOperator(installDir string, apiKey string, opera
 		printStatus(cc.Progressing, "PROGRESSING", true)
 		printStatus(cc.Upgradeable, "UPGRADEABLE", false)
 		fmt.Printf("\n")
+		if cc.Available == "False" && cc.AvailableMessage != "" {
+			message := cc.AvailableMessage
+			if len(message) > 80 {
+				message = message[0:79] + "..."
+			}
+
+			fmt.Printf("    %s\n", message)
+			fmt.Println()
+		}
 
 		if cc.Available == "True" {
 			break
@@ -837,12 +846,12 @@ func updateOpenshiftGetPods(installDir string, cmd []string, savedJsonFile strin
 
 		err = gatherBufferedErrors(bufferedChannel)
 		if err != nil {
-			log.Debugf("updateOpenshiftPhase3: getPods returns %v", err)
+			log.Debugf("updateOpenshiftGetPods: getPods returns %v", err)
 		} else {
-			log.Debugf("updateOpenshiftPhase3: apods = %+v", apods)
+			log.Debugf("updateOpenshiftGetPods: apods = %+v", apods)
 		}
 
-		fmt.Printf("The pods of openshift-machine-config-operator are:\n")
+		fmt.Printf("The pods of %s are:\n", namespace)
 
 		allRunning = true
 		for _, pod := range apods {
@@ -860,8 +869,11 @@ func updateOpenshiftGetPods(installDir string, cmd []string, savedJsonFile strin
 				}
 			}
 		}
+		if len(apods) == 0 {
+			fmt.Println("There are no pods found yet")
+		}
 
-		if allRunning {
+		if allRunning && len(apods) > 0 {
 			break
 		}
 

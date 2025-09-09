@@ -25,11 +25,15 @@ import (
 )
 
 type clusterConditions struct {
-	Name        string
-	Available   string
-	Degraded    string
-	Progressing string
-	Upgradeable string
+	Name               string
+	Available          string
+	AvailableMessage   string
+	Degraded           string
+	DegradedMessage    string
+	Progressing        string
+	ProgressingMessage string
+	Upgradeable        string
+	UpgradeableMessage string
 }
 
 type statusCondition struct {
@@ -48,7 +52,6 @@ type podInfo struct {
 	Name       string
 	Namespace  string
 	Phase      string
-	Exitcode   float64
 	Containers []containerInfo
 }
 
@@ -58,6 +61,7 @@ type containerInfo struct {
 	HasRestartCount bool
 	RestartCount    float64
 	ExitCode        float64
+	Reason          string
 }
 
 func parseJsonFile(filename string) (map[string]interface{}, error) {
@@ -395,25 +399,33 @@ func getClusterOperator(jsonCo map[string]any, name string, bufferedChannel chan
 
 		for _, conditionItem := range conditionsArray {
 			var (
-				conditionMap map[string]any
-				typeResult   string
-				statusResult string
+				conditionMap  map[string]any
+				typeResult    string
+				statusResult  string
+				messageResult string
 			)
 
 			conditionMap = getJsonMap(conditionItem, bufferedChannel)
 
 			typeResult = getJsonMapString(conditionMap, "type", bufferedChannel)
 			statusResult = getJsonMapString(conditionMap, "status", bufferedChannel)
+			if ok := jsonMapHasKey(conditionMap, "message", bufferedChannel); ok {
+				messageResult = getJsonMapString(conditionMap, "message", bufferedChannel)
+			}
 
 			switch typeResult {
 			case "Available":
 				cc.Available = statusResult
+				cc.AvailableMessage = messageResult
 			case "Degraded":
 				cc.Degraded = statusResult
+				cc.DegradedMessage = messageResult
 			case "Progressing":
 				cc.Progressing = statusResult
+				cc.ProgressingMessage = messageResult
 			case "Upgradeable":
 				cc.Upgradeable = statusResult
+				cc.UpgradeableMessage = messageResult
 			default:
 				log.Debugf("getClusterOperator: unknown type %s", typeResult)
 			}
@@ -520,7 +532,6 @@ func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podIn
 			phase             string
 			containerStatuses []any
 			acontainers       []containerInfo
-			exitCode          float64
 		)
 
 		itemMap = getJsonMap(rootItem, bufferedChannel)
@@ -544,6 +555,8 @@ func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podIn
 				restartCount       float64
 				stateMap           map[string]any
 				state              string
+				exitCode           float64
+				reason             string
 			)
 
 			containerStatusMap = getJsonMap(containerStatus, bufferedChannel)
@@ -555,11 +568,13 @@ func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podIn
 			if jsonMapHasKey(stateMap, "running", bufferedChannel) {
 				state = "(running)"
 			} else if jsonMapHasKey(stateMap, "terminated", bufferedChannel) {
-				var (
-					terminatedMap map[string]any
-				)
-				terminatedMap = getJsonMapValue(stateMap, "terminated", bufferedChannel)
+				state = "(terminated)"
+				terminatedMap := getJsonMapValue(stateMap, "terminated", bufferedChannel)
 				exitCode = getJsonMapFloat64(terminatedMap, "exitCode", bufferedChannel)
+			} else if jsonMapHasKey(stateMap, "waiting", bufferedChannel) {
+				state = "(waiting)"
+				waitingMap := getJsonMapValue(stateMap, "waiting", bufferedChannel)
+				reason = getJsonMapString(waitingMap, "reason", bufferedChannel)
 			}
 
 			hasRestartCount := jsonMapHasKey(containerStatusMap, "restartCount", bufferedChannel)
@@ -573,6 +588,7 @@ func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podIn
 				HasRestartCount: hasRestartCount,
 				RestartCount:    restartCount,
 				ExitCode:        exitCode,
+				Reason:          reason,
 			})
 		}
 
@@ -580,7 +596,6 @@ func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podIn
 			Name:       name,
 			Namespace:  namespace,
 			Phase:      phase,
-			Exitcode:   exitCode,
 			Containers: acontainers,
 		})
 	}
