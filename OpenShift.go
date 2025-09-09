@@ -44,6 +44,22 @@ type secretInfo struct {
 	Namespace string
 }
 
+type podInfo struct {
+	Name       string
+	Namespace  string
+	Phase      string
+	Exitcode   float64
+	Containers []containerInfo
+}
+
+type containerInfo struct {
+	Name            string
+	State           string
+	HasRestartCount bool
+	RestartCount    float64
+	ExitCode        float64
+}
+
 func parseJsonFile(filename string) (map[string]interface{}, error) {
 	var (
 		data     []byte
@@ -93,6 +109,22 @@ func getJsonMapString(jsonMap map[string]any, key string, bufferedChannel chan e
 	jsonMapString, ok := jsonMap[key].(string)
 	if !ok {
 		bufferedChannel<-fmt.Errorf("getJsonMapString: jsonMap[%s] returned error", key)
+	}
+	return
+}
+
+func getJsonMapInt64(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapInt64 int64) {
+	jsonMapInt64, ok := jsonMap[key].(int64)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMapInt64: jsonMap[%s] returned error", key)
+	}
+	return
+}
+
+func getJsonMapFloat64(jsonMap map[string]any, key string, bufferedChannel chan error) (jsonMapFloat64 float64) {
+	jsonMapFloat64, ok := jsonMap[key].(float64)
+	if !ok {
+		bufferedChannel<-fmt.Errorf("getJsonMapFloat64: jsonMap[%s] returned error", key)
 	}
 	return
 }
@@ -463,6 +495,93 @@ func getSecrets(jsonSecrets map[string]any, bufferedChannel chan error) (asecret
 		asecrets = append(asecrets, secretInfo{
 			Name:      name,
 			Namespace: namespace,
+		})
+	}
+
+	return
+}
+
+func getPods(jsonPods map[string]any, bufferedChannel chan error) (apods []podInfo) {
+	var (
+		rootItemArray []any
+	)
+
+	rootItemArray = getJsonArrayValue(jsonPods, "items", bufferedChannel)
+
+	apods = make([]podInfo, 0)
+
+	for _, rootItem := range rootItemArray {
+		var (
+			itemMap           map[string]any
+			metadataMap       map[string]any
+			name              string
+			namespace         string
+			statusMap         map[string]any
+			phase             string
+			containerStatuses []any
+			acontainers       []containerInfo
+			exitCode          float64
+		)
+
+		itemMap = getJsonMap(rootItem, bufferedChannel)
+
+		metadataMap = getJsonMapValue(itemMap, "metadata", bufferedChannel)
+		name = getJsonMapString(metadataMap, "name", bufferedChannel)
+		namespace = getJsonMapString(metadataMap, "namespace", bufferedChannel)
+
+		statusMap = getJsonMapValue(itemMap, "status", bufferedChannel)
+		phase = getJsonMapString(statusMap, "phase", bufferedChannel)
+
+		if jsonMapHasKey(statusMap, "containerStatuses", bufferedChannel) {
+			containerStatuses = getJsonArrayValue(statusMap, "containerStatuses", bufferedChannel)
+		}
+
+		acontainers = make([]containerInfo, 0)
+		for _, containerStatus := range containerStatuses {
+			var (
+				containerStatusMap map[string]any
+				containerName      string
+				restartCount       float64
+				stateMap           map[string]any
+				state              string
+			)
+
+			containerStatusMap = getJsonMap(containerStatus, bufferedChannel)
+			containerName = getJsonMapString(containerStatusMap, "name", bufferedChannel)
+
+			stateMap = getJsonMapValue(containerStatusMap, "state", bufferedChannel)
+
+			state = ""
+			if jsonMapHasKey(stateMap, "running", bufferedChannel) {
+				state = "(running)"
+			} else if jsonMapHasKey(stateMap, "terminated", bufferedChannel) {
+				var (
+					terminatedMap map[string]any
+				)
+				terminatedMap = getJsonMapValue(stateMap, "terminated", bufferedChannel)
+				exitCode = getJsonMapFloat64(terminatedMap, "exitCode", bufferedChannel)
+			}
+
+			hasRestartCount := jsonMapHasKey(containerStatusMap, "restartCount", bufferedChannel)
+			if hasRestartCount {
+				restartCount = getJsonMapFloat64(containerStatusMap, "restartCount", bufferedChannel)
+			}
+
+			acontainers = append(acontainers, containerInfo{
+				Name:            containerName,
+				State:           state,
+				HasRestartCount: hasRestartCount,
+				RestartCount:    restartCount,
+				ExitCode:        exitCode,
+			})
+		}
+
+		apods = append(apods, podInfo{
+			Name:       name,
+			Namespace:  namespace,
+			Phase:      phase,
+			Exitcode:   exitCode,
+			Containers: acontainers,
 		})
 	}
 

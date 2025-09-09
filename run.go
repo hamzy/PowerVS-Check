@@ -118,10 +118,10 @@ func runSplitCommandJson(kubeconfig string, acmdline []string) (map[string]inter
 		fmt.Sprintf("KUBECONFIG=%s", kubeconfig),
 	)
 
-//	log.Debugf("Running: %+v", acmdline)
 	out, err = cmd.CombinedOutput()
-//	fmt.Println("out:")
-//	fmt.Printf("%s", string(out))
+	if err != nil {
+		return nil, err
+	}
 
 	err = json.Unmarshal(out, &jsonData)
 	if err != nil {

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,19 @@ import (
 const (
 	useTview = false
 	useSavedJson = false
+)
+
+var (
+	aOpenshiftPhases = []func(installDir string, apiKey string) error {
+		updateOpenshiftPhase1,
+		updateOpenshiftPhase2,
+		updateOpenshiftPhase3,
+		updateOpenshiftPhase4,
+		updateOpenshiftPhase5,
+		updateOpenshiftPhase6,
+		updateOpenshiftPhase7,
+		updateOpenshiftPhase99,
+	}
 )
 
 func watchCreateCommand(watchCreateClusterFlags *flag.FlagSet, args []string) error {
@@ -288,7 +302,7 @@ func updateCAPIPhase3(kubeconfig string, app *tview.Application, capiWindows map
 
 	for true {
 		if useSavedJson {
-			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines2.json")
+			jsonPVSMachines, err = parseJsonFile("ibmpowervsmachines3.json")
 		} else {
 			jsonPVSMachines, err = runSplitCommandJson(kubeconfig, cmdOcGetPVSMachines)
 		}
@@ -456,13 +470,7 @@ func watchOpenshiftPhases(installDir string, apiKey string) error {
 		return err
 	}
 
-	for _, phase := range []func(installDir string, apiKey string) error {
-		updateOpenshiftPhase1,
-		updateOpenshiftPhase2,
-		updateOpenshiftPhase3,
-		updateOpenshiftPhase4,
-		updateOpenshiftPhase99,
-	} {
+	for _, phase := range aOpenshiftPhases {
 		err = phase(installDir, apiKey)
 		if err != nil {
 			return err
@@ -551,7 +559,7 @@ func updateOpenshiftPhase1(installDir string, apiKey string) error {
 func updateOpenshiftPhase2(installDir string, apiKey string) error {
 	var (
 		cmdOcGetSecrets = []string{
-			"oc", "get", "secrets", "-A", "-o", "json",
+			"oc", "--request-timeout=5s", "get", "secrets", "-A", "-o", "json",
 		}
 		jsonSecrets     map[string]interface{}
 		asecretsWanted  = []secretInfo{
@@ -563,6 +571,8 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 			{ Name: "capi-ibmcloud-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"              },
 		}
 		asecretsFound   []secretInfo
+		allFound        bool
+		numFound        int
 		err             error
 	)
 
@@ -577,7 +587,14 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 			jsonSecrets, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetSecrets)
 		}
 		if err != nil {
-			return fmt.Errorf("Error: could not run command: %v", err)
+			if exitError, ok := err.(*exec.ExitError); ok {
+				exitCode := exitError.ExitCode()
+				fmt.Printf("[ %s ] returned %d\n", strings.Join(cmdOcGetSecrets, " "), exitCode)
+				time.Sleep(10 * time.Second)
+				continue
+			} else {
+				return fmt.Errorf("Error: could not run command: %v", err)
+			}
 		}
 //		log.Debugf("updateOpenshiftPhase2: jsonSecrets = %+v", jsonOGD)
 
@@ -593,12 +610,14 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 			log.Debugf("updateOpenshiftPhase2: asecretsFound = %+v", asecretsFound)
 		}
 
-		allFound := true
+		allFound = true
+		numFound = 0
 		for _, wantSecret := range asecretsWanted {
 			foundOne := false
 			for _, foundSecret := range asecretsFound {
 				if wantSecret.Name == foundSecret.Name && wantSecret.Namespace == foundSecret.Namespace {
 					foundOne = true
+					numFound++
 					break
 				}
 			}
@@ -609,7 +628,10 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 		}
 
 		if allFound {
+			fmt.Println("Found every secret")
 			break
+		} else {
+			fmt.Printf("Found only (%d/%d) secrets\n", numFound, len(asecretsWanted))
 		}
 
 		time.Sleep(10 * time.Second)
@@ -619,13 +641,24 @@ func updateOpenshiftPhase2(installDir string, apiKey string) error {
 }
 
 func updateOpenshiftPhase3(installDir string, apiKey string) error {
-	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "network")
+	var (
+		cmdOcGetPods = []string{
+			"oc", "--request-timeout=5s", "get", "pods", "-n", "openshift-machine-config-operator", "-o", "json",
+		}
+	)
+
+	return updateOpenshiftGetPods(
+		installDir,
+		cmdOcGetPods,
+		"ocgetpodsmco1.json",
+		"openshift-machine-config-operator",
+	)
 }
 
 func updateOpenshiftPhase4(installDir string, apiKey string) error {
 	var (
 		cmdOcGetDeployment = []string{
-			"oc", "get", "deployment/powervs-cloud-controller-manager", "-n", "openshift-cloud-controller-manager", "-o", "json",
+			"oc", "--request-timeout=5s", "get", "deployment/powervs-cloud-controller-manager", "-n", "openshift-cloud-controller-manager", "-o", "json",
 		}
 		jsonOGD            map[string]interface{}
 		cc                 clusterConditions
@@ -635,13 +668,22 @@ func updateOpenshiftPhase4(installDir string, apiKey string) error {
 	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
 
 	for true {
+		fmt.Println("Querying the deployment of powervs-cloud-controller-manager: 8<--------8<--------")
+
 		if useSavedJson {
 			jsonOGD, err = parseJsonFile("ocgetdeploymentpccm1.json")
 		} else {
 			jsonOGD, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetDeployment)
 		}
 		if err != nil {
-			return fmt.Errorf("Error: could not run command: %v", err)
+			if exitError, ok := err.(*exec.ExitError); ok {
+				exitCode := exitError.ExitCode()
+				fmt.Printf("[ %s ] returned %d\n", strings.Join(cmdOcGetDeployment, " "), exitCode)
+				time.Sleep(10 * time.Second)
+				continue
+			} else {
+				return fmt.Errorf("Error: could not run command: %v", err)
+			}
 		}
 //		log.Debugf("updateOpenshiftPhase4: jsonOGD = %+v", jsonOGD)
 
@@ -671,6 +713,29 @@ func updateOpenshiftPhase4(installDir string, apiKey string) error {
 	return err
 }
 
+func updateOpenshiftPhase5(installDir string, apiKey string) error {
+	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "cloud-controller-manager")
+}
+
+func updateOpenshiftPhase6(installDir string, apiKey string) error {
+	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "network")
+}
+
+func updateOpenshiftPhase7(installDir string, apiKey string) error {
+	var (
+		cmdOcGetPods = []string{
+			"oc", "--request-timeout=5s", "get", "pods", "-n", "openshift-machine-api", "-o", "json",
+		}
+	)
+
+	return updateOpenshiftGetPods(
+		installDir,
+		cmdOcGetPods,
+		"ocgetpodsmachineapi1.json",
+		"openshift-machine-api",
+	)
+}
+
 func updateOpenshiftPhase99(installDir string, apiKey string) error {
 	return updateOpenshiftPhaseClusterOperator(installDir, apiKey, "authentication")
 }
@@ -688,13 +753,22 @@ func updateOpenshiftPhaseClusterOperator(installDir string, apiKey string, opera
 	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
 
 	for true {
+		fmt.Printf("Querying the status of the cluster operator %s: 8<--------8<--------\n", operator)
+
 		if useSavedJson {
 			jsonCo, err = parseJsonFile("ocgetco1.json")
 		} else {
 			jsonCo, err = runSplitCommandJson(kubeconfigOpenshift, cmdOcGetCo)
 		}
 		if err != nil {
-			return fmt.Errorf("Error: could not run command: %v", err)
+			if exitError, ok := err.(*exec.ExitError); ok {
+				exitCode := exitError.ExitCode()
+				fmt.Printf("[ %s ] returned %d\n", strings.Join(cmdOcGetCo, " "), exitCode)
+				time.Sleep(10 * time.Second)
+				continue
+			} else {
+				return fmt.Errorf("Error: could not run command: %v", err)
+			}
 		}
 
 		// @TODO is there a way to avoid the large hardcoded value?
@@ -717,6 +791,77 @@ func updateOpenshiftPhaseClusterOperator(installDir string, apiKey string, opera
 		fmt.Printf("\n")
 
 		if cc.Available == "True" {
+			break
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+
+	return err
+}
+
+func updateOpenshiftGetPods(installDir string, cmd []string, savedJsonFile string, namespace string) error {
+	var (
+		jsonOGP    map[string]interface{}
+		apods      []podInfo
+		allRunning bool
+		err        error
+	)
+
+	kubeconfigOpenshift := filepath.Join(installDir, "auth/kubeconfig")
+
+	for true {
+		fmt.Printf("Querying the pods of %s: 8<--------8<--------\n", namespace)
+
+		if useSavedJson {
+			jsonOGP, err = parseJsonFile(savedJsonFile)
+		} else {
+			jsonOGP, err = runSplitCommandJson(kubeconfigOpenshift, cmd)
+		}
+		if err != nil {
+			if exitError, ok := err.(*exec.ExitError); ok {
+				exitCode := exitError.ExitCode()
+				fmt.Printf("[ %s ] returned %d\n", strings.Join(cmd, " "), exitCode)
+				time.Sleep(10 * time.Second)
+				continue
+			} else {
+				return fmt.Errorf("Error: could not run command: %v", err)
+			}
+		}
+//		log.Debugf("updateOpenshiftPhase3: jsonOGD = %+v", jsonOGD)
+
+		// @TODO is there a way to avoid the large hardcoded value?
+		bufferedChannel := make(chan error, 100)
+
+		apods = getPods(jsonOGP, bufferedChannel)
+
+		err = gatherBufferedErrors(bufferedChannel)
+		if err != nil {
+			log.Debugf("updateOpenshiftPhase3: getPods returns %v", err)
+		} else {
+			log.Debugf("updateOpenshiftPhase3: apods = %+v", apods)
+		}
+
+		fmt.Printf("The pods of openshift-machine-config-operator are:\n")
+
+		allRunning = true
+		for _, pod := range apods {
+			fmt.Printf("Pod: %s -n %s (%s)\n", pod.Name, pod.Namespace, pod.Phase)
+
+			if pod.Phase != "Running" {
+				allRunning = false
+			}
+
+			for _, container := range pod.Containers {
+				if container.HasRestartCount {
+					fmt.Printf("     Container: %s %s (%v)\n", container.Name, container.State, container.RestartCount)
+				} else {
+					fmt.Printf("     Container: %s %s\n", container.Name, container.State)
+				}
+			}
+		}
+
+		if allRunning {
 			break
 		}
 
